@@ -2,8 +2,9 @@
 //!
 //! This module handles the TCP connection and async read/write tasks.
 
+use std::sync::Arc;
 use tokio::net::TcpStream;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 
 use crate::decoder::TelnetDecoder;
 use crate::encoder::TelnetEncoder;
@@ -17,8 +18,8 @@ use crate::types::{TelnetCommand, TelnetEvent};
 ///
 /// Manages the TCP connection and async read/write tasks.
 pub struct TelnetConnection {
-    /// TCP stream
-    stream: Option<TcpStream>,
+    /// TCP stream (wrapped in Arc<Mutex<>> for shared ownership)
+    stream: Arc<Mutex<Option<TcpStream>>>,
     
     /// State manager
     state_manager: StateManager,
@@ -33,23 +34,23 @@ pub struct TelnetConnection {
     decoder: TelnetDecoder,
     
     /// Send channel for commands to write task
-    tx: Option<mpsc::Sender<Vec<u8>>>,
+    tx: mpsc::Sender<Vec<u8>>,
     
     /// Receive channel for events from read task
-    rx: Option<mpsc::Receiver<TelnetEvent>>,
+    rx: mpsc::Receiver<TelnetEvent>,
 }
 
 impl TelnetConnection {
     /// Create a new connection.
     pub fn new() -> Self {
         Self {
-            stream: None,
+            stream: Arc::new(Mutex::new(None)),
             state_manager: StateManager::new(),
             option_negotiator: OptionNegotiator::new(),
             encoder: TelnetEncoder::new(),
             decoder: TelnetDecoder::new(),
-            tx: None,
-            rx: None,
+            tx: mpsc::channel(64).0,
+            rx: mpsc::channel(64).1,
         }
     }
 
@@ -59,15 +60,8 @@ impl TelnetConnection {
         conn.state_manager.set_connection_state(crate::types::ConnectionState::Connecting);
         
         let stream = TcpStream::connect((host, port)).await?;
-        conn.stream = Some(stream);
+        *conn.stream.lock().await = Some(stream);
         conn.state_manager.set_connection_state(crate::types::ConnectionState::Connected);
-        
-        // Start read/write tasks
-        // tx sends Vec<u8> to write task, rx receives TelnetEvent from read task
-        let (tx, _rx) = mpsc::channel::<Vec<u8>>(64);
-        let (_rx2, rx) = mpsc::channel::<TelnetEvent>(64);
-        conn.tx = Some(tx);
-        conn.rx = Some(rx);
         
         Ok(conn)
     }
@@ -118,41 +112,31 @@ impl TelnetConnection {
     /// Send a TELNET command.
     pub async fn send_command(&mut self, command: &TelnetCommand) -> Result<()> {
         let encoded = TelnetEncoder::encode_command(command);
-        if let Some(tx) = &self.tx {
-            tx.send(encoded).await.map_err(|e| {
-                TelnetError::ChannelSend(e.to_string())
-            })?;
-        }
+        self.tx.send(encoded).await.map_err(|e| {
+            TelnetError::ChannelSend(e.to_string())
+        })?;
         Ok(())
     }
 
     /// Send data to the server.
     pub async fn send(&mut self, data: &[u8]) -> Result<()> {
         let encoded = TelnetEncoder::encode_data(data);
-        if let Some(tx) = &self.tx {
-            tx.send(encoded).await.map_err(|e| {
-                TelnetError::ChannelSend(e.to_string())
-            })?;
-        }
+        self.tx.send(encoded).await.map_err(|e| {
+            TelnetError::ChannelSend(e.to_string())
+        })?;
         Ok(())
     }
 
     /// Receive an event from the server.
     pub async fn receive(&mut self) -> Result<TelnetEvent> {
-        if let Some(rx) = &mut self.rx {
-            rx.recv().await.ok_or(TelnetError::ChannelRecv(
-                "channel closed".to_string()
-            ))
-        } else {
-            Err(TelnetError::Disconnected)
-        }
+        self.rx.recv().await.ok_or(TelnetError::ChannelRecv(
+            "channel closed".to_string()
+        ))
     }
 
     /// Disconnect from the server.
     pub async fn disconnect(&mut self) -> Result<()> {
-        self.stream = None;
-        self.tx = None;
-        self.rx = None;
+        *self.stream.lock().await = None;
         self.state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
         Ok(())
     }
