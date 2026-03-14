@@ -129,7 +129,14 @@ impl TelnetConnection {
         
         // Read a single byte to get events one at a time
         let mut buffer = [0u8; 1];
-        stream.read(&mut buffer).await?;
+        let bytes_read = stream.read(&mut buffer).await?;
+        
+        // Check for EOF (server closed connection)
+        if bytes_read == 0 {
+            self.stream = None;
+            self.state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
+            return Ok(TelnetEvent::Closed);
+        }
         
         // Decode the byte
         if let Some(cmd) = self.decoder.decode_byte(buffer[0]) {
