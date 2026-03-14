@@ -1,0 +1,136 @@
+RFC 1184
+===============================================================================
+
+TELENET LINEMODE OPTION
+
+Status of this Memo
+
+   This memo describes a Draft Standard for the Internet community,
+   and requests discussion and suggestions for improvements.
+   This RFC specifies an IAB standards track protocol for the
+   Internet community.
+
+   This RFC was written at Cray Research, Inc. by the Telnet Working
+   Group.
+
+   The Telnet Working Group is chaired by D. Borman.
+
+Overview
+--------
+
+Linemode Telnet is a way of doing terminal character processing on
+the client side of a TELNET connection.  While in Linemode with
+editing enabled for the local side, network traffic is reduced to a
+couple of packets per command line, rather than a couple of packets
+per character typed.
+
+This is very useful for:
+- Long delay networks (user has local response time while typing)
+- Networks that charge on a per-packet basis
+
+Command Names and Codes
+-----------------------
+
+LINEMODE        34
+    MODE             1
+        EDIT             1
+        TRAPSIG          2
+        MODE_ACK         4
+        SOFT_TAB         8
+        LIT_ECHO        16
+    FORWARDMASK      2
+    SLC, Set Local Characters  3
+
+Command Meanings
+----------------
+
+The LINEMODE Function
+   LINEMODE allows the server to control how the client processes
+   characters locally before sending them over the network.
+
+LINEMODE Suboption MODE
+   Controls various editing modes:
+   - EDIT: Enable local editing
+   - TRAPSIG: Trap signals locally
+   - MODE_ACK: Acknowledge mode changes
+   - SOFT_TAB: Soft tab processing
+   - LIT_ECHO: Literal echo of non-printable characters
+
+LINEMODE Suboption FORWARDMASK
+   Specifies which control characters should be forwarded to the
+   server even when local editing is enabled.
+
+LINEMODE Suboption SLC (Set Local Characters)
+   Defines special local characters and their functions.
+
+Default Specification
+---------------------
+
+   The default state is to operate in remote echo mode without
+   linemode processing.
+
+Motivation
+----------
+
+The linemode option was created to address the inefficiency of
+character-at-a-time transmission over high-latency networks.  By
+allowing local line editing and only sending complete lines,
+significant network traffic reduction is achieved.
+
+Implementation Rules
+--------------------
+
+1. User Interface
+   - The client should provide a visible indication when linemode is
+     active
+   - Local editing should be clearly distinguishable from remote echo
+
+2. End of Line Terminators
+   - The client must properly handle different end-of-line conventions
+   - CR/LF should be converted appropriately
+
+3. Output Processing
+   - Server output should be displayed correctly regardless of mode
+   - Cursor positioning must be handled properly
+
+4. Setting of Local Characters
+   - Special characters should be configurable
+   - Default mappings should be sensible
+
+5. Flushing Input and Output
+   - Proper flush behavior when mode changes occur
+   - No data loss during transitions
+
+6. State Diagram for SLC
+   - Proper state machine for special character handling
+   - Error recovery when invalid states occur
+
+Example of a Connection
+-----------------------
+
+1. Server sends: IAC WILL LINEMODE
+2. Client responds: IAC DO LINEMODE
+3. Server sends: IAC SB LINEMODE MODE WILL EDIT IAC SE
+4. Client acknowledges: IAC SB LINEMODE MODE WILL EDIT IAC SE
+5. Client now processes input locally and sends complete lines
+
+Other Telnet Options and RFCs
+-----------------------------
+
+The linemode option works in conjunction with:
+- RFC 854: Telnet Protocol Specification
+- RFC 855: Telnet Option Specifications
+- RFC 857: Telnet ECHO Option
+- RFC 858: Telnet SUPPRESS-GO-AHEAD Option
+
+Security Considerations
+-----------------------
+
+The linemode option does not introduce new security concerns beyond
+those of the base TELNET protocol.  However, implementers should be
+aware that:
+- Local editing can affect what is transmitted
+- Special character handling must be secure
+- Input validation should still occur on the server side
+
+===============================================================================

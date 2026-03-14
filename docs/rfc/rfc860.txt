@@ -1,0 +1,117 @@
+RFC 860
+===============================================================================
+
+TELENET TIMING MARK OPTION
+
+Status of this Memo
+
+   This RFC specifies a standard for the ARPA Internet community.
+   Hosts on the ARPA Internet are expected to adopt and implement
+   this standard.
+
+   This RFC was written at USC-ISI by the Network Working Group
+   (NWG) of the Information Processing Techniques Office (IPTO)
+   of the Advanced Research Projects Agency (ARPA), Department
+   of Defense.
+
+   The Network Working Group is chaired by Professor S. Crocker.
+
+Command Name and Code
+---------------------
+
+   TIMING-MARK          6
+
+Command Meanings
+----------------
+
+IAC DO TIMING-MARK
+   The sender of this command REQUESTS that the receiver of this
+   command return a WILL TIMING-MARK in the data stream at the
+   "appropriate place" as defined in section 4 below.
+
+IAC WILL TIMING-MARK
+   The sender of this command ASSURES the receiver of this command
+   that it is inserted in the data stream at the "appropriate place"
+   to insure synchronization with a DO TIMING-MARK transmitted by the
+   receiver of this command.
+
+IAC WON'T TIMING-MARK
+   The sender of this command REFUSES to insure that this command is
+   inserted in the data stream at the "appropriate place" to insure
+   synchronization.
+
+IAC DON'T TIMING-MARK
+   The sender of this command notifies the receiver of this command
+   that a WILL TIMING-MARK (previously transmitted by the receiver of
+   this command) has been IGNORED.
+
+Default
+-------
+
+   WON'T TIMING-MARK, DON'T TIMING-MARK
+
+   No explicit attempt is made to synchronize the activities at the
+   two ends of the TELNET connection.
+
+Motivation for the Option
+-------------------------
+
+It is sometimes useful for a user or process at one end of a TELNET
+connection to be sure that previously transmitted data has been
+completely processed, printed, discarded, or otherwise disposed of.
+
+Even if the option request (DO TIMING-MARK) is refused (by WON'T
+TIMING-MARK), the requester is at least assured that the refuser has
+received (if not processed) all previous data.
+
+Example Application:
+A server discovers a command it cannot parse (perhaps due to user
+typing error). It would like to:
+1. Throw away all of the user's "type-ahead"
+2. Send the user an error message
+3. Resume interpretation of commands which the user typed after seeing
+   the error message
+
+The server sends a DO TIMING-MARK and hopes to receive a WILL
+TIMING-MARK from the user at the "appropriate place" in the data
+stream.
+
+The "appropriate place" is just before the first character which the
+user typed after seeing the error message.
+
+Description of the Option
+-------------------------
+
+When Process A wishes to synchronize with B:
+1. DO TIMING-MARK is sent from A to B
+2. B can refuse by replying WON'T TIMING-MARK, or agree by permitting
+   the timing mark to flow through its outgoing buffer
+3. B enters the mark into its incoming buffer to flow toward A
+4. When the mark has propagated through B's incoming buffer, B returns
+   the WILL TIMING-MARK over the TELNET connection to A
+
+When A receives the WILL TIMING-MARK, A knows that:
+- All information sent to B before sending the timing mark has been
+  delivered
+- All information sent from B to A before turnaround of the timing
+  mark has been delivered
+
+Three Typical Applications:
+
+A. Measure round-trip delay between a process and a terminal or
+   another process.
+
+B. Resynchronizing an interaction:
+   1. A sends carriage return, line feed, question mark
+   2. A sends DO TIMING-MARK
+   3. A sends error message
+   4. A starts reading input and throwing it away until receiving
+      WILL TIMING-MARK
+   5. A resumes interpretation of input
+
+C. The dual of B above - terminal user wants to throw away unwanted
+   output from A by flushing output up to the point where A saw the
+   timing mark, but not output generated in response to following
+   command.
+
+===============================================================================

@@ -1,0 +1,129 @@
+RFC 857
+===============================================================================
+
+TELENET ECHO OPTION
+
+Status of this Memo
+
+   This RFC specifies a standard for the ARPA Internet community.
+   Hosts on the ARPA Internet are expected to adopt and implement
+   this standard.
+
+   This RFC was written at USC-ISI by the Network Working Group
+   (NWG) of the Information Processing Techniques Office (IPTO)
+   of the Advanced Research Projects Agency (ARPA), Department
+   of Defense.
+
+   The Network Working Group is chaired by Professor S. Crocker.
+
+Command Name and Code
+---------------------
+
+   ECHO       1
+
+Command Meanings
+----------------
+
+IAC WILL ECHO
+   The sender of this command REQUESTS to begin, or confirms that it
+   will now begin, echoing data characters it receives over the
+   TELNET connection back to the sender of the data characters.
+
+IAC WON'T ECHO
+   The sender of this command DEMANDS to stop, or refuses to start,
+   echoing the data characters it receives over the TELNET connection
+   back to the sender of the data characters.
+
+IAC DO ECHO
+   The sender of this command REQUESTS that the receiver of this
+   command begin echoing, or confirms that the receiver of this
+   command is expected to echo, data characters it receives over the
+   TELNET connection back to the sender.
+
+IAC DON'T ECHO
+   The sender of this command DEMANDS the receiver of this command
+   stop, or not start, echoing data characters it receives over the
+   TELNET connection.
+
+Default
+-------
+
+   WON'T ECHO
+   DON'T ECHO
+
+   No echoing is done over the TELNET connection.
+
+Motivation for the Option
+-------------------------
+
+The NVT has a printer and a keyboard which are nominally interconnected
+so that "echoes" need never traverse the network.  In highly
+interactive situations, it is appropriate for the remote process to
+control the way characters are echoed on the printer.  The ECHO option
+allows parties at the two ends of the TELNET connection to agree that
+characters typed on an NVT keyboard are to be echoed by the party at
+the other end of the TELNET connection.
+
+Description of the Option
+-------------------------
+
+When the echoing option is in effect, the party performing the echoing
+is expected to transmit (echo) data characters it receives back to
+the sender of the data characters.  The option does not require that
+the characters echoed be exactly the characters received.
+
+When the echoing option is not in effect, the receiver of data
+characters should not echo them back to the sender.
+
+Normal TELNET connection is two-way.  Data flows in each direction
+independently; neither, either, or both directions may be operating
+simultaneously in echo mode.
+
+Five reasonable modes of operation for echoing on a connection pair:
+
+1. Neither end echoes
+2. One end echoes for itself
+3. One end echoes for the other
+4. Both ends echo for themselves
+5. One end echoes for both ends
+
+Important Note:
+If BOTH hosts enter the mode of echoing characters transmitted by the
+other host, then any character transmitted in either direction will be
+"echoed" back and forth indefinitely.  Therefore, care should be taken
+that if one site is echoing, echoing is not permitted to be turned on
+at the other.
+
+Implementation Rules
+--------------------
+
+1. Both parties to a full-duplex TELNET connection initially assume
+   each direction is being operated in the default mode (non-echo).
+
+2. If either party desires to echo characters to the other party or
+   for the other party to echo characters to him, that party gives
+   the appropriate command (WILL ECHO or DO ECHO) and waits for
+   acceptance.
+
+3. After a connection has been changed to echo mode, either party may
+   demand that it revert to non-echo mode by giving the appropriate
+   DON'T ECHO or WON'T ECHO command.
+
+4. Each direction of the TELNET connection may be put in remote
+   echoing mode independently.
+
+5. Each direction of the TELNET connection must be removed from remote
+   echoing mode separately.
+
+6. Implementations must follow the loop preventing rules given in the
+   TELNET Protocol Specification.
+
+7. Switches between echo and non-echo mode should be made at times
+   precisely coordinated with the reception and transmission of echo
+   requests and demands.
+
+8. The ECHO option alone will normally not be sufficient to effect
+   remote computer echoing.  The SUPPRESS-GO-AHEAD option will normally
+   have to be invoked in conjunction with the ECHO option.
+
+===============================================================================

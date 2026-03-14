@@ -1,0 +1,107 @@
+RFC 859
+===============================================================================
+
+TELENET STATUS OPTION
+
+Status of this Memo
+
+   This RFC specifies a standard for the ARPA Internet community.
+   Hosts on the ARPA Internet are expected to adopt and implement
+   this standard.
+
+   This RFC was written at USC-ISI by the Network Working Group
+   (NWG) of the Information Processing Techniques Office (IPTO)
+   of the Advanced Research Projects Agency (ARPA), Department
+   of Defense.
+
+   The Network Working Group is chaired by Professor S. Crocker.
+
+Command Name and Code
+---------------------
+
+   STATUS       5
+
+Command Meanings
+----------------
+
+This option applies separately to each direction of data flow.
+
+IAC DON'T STATUS
+   Sender refuses to carry on any further discussion of the current
+   status of options.
+
+IAC WON'T STATUS
+   Sender refuses to carry on any further discussion of the current
+   status of options.
+
+IAC SB STATUS SEND IAC SE
+   Sender requests receiver to transmit his (the receiver's)
+   perception of the current status of Telnet options. The code for
+   SEND is 1.
+
+IAC SB STATUS IS ... IAC SE
+   Sender is stating his perception of the current status of Telnet
+   options. The code for IS is 0.
+
+Default
+-------
+
+   DON'T STATUS, WON'T STATUS
+
+   The current status of options will not be discussed.
+
+Motivation for the Option
+-------------------------
+
+This option allows a user/process to verify the current status of
+TELNET options (e.g., echoing) as viewed by the person/process on the
+other end of the TELNET connection. Simply renegotiating options
+could lead to the non-terminating request loop problem discussed in
+the General Consideration section of the TELNET Specification.
+
+Description of the Option
+-------------------------
+
+1. WILL and DO are used only to obtain and grant permission for future
+   discussion. The actual exchange of status information occurs within
+   option subcommands (IAC SB STATUS...).
+
+2. Once the two hosts have exchanged a WILL and a DO:
+   - The sender of WILL STATUS is free to transmit status information
+     spontaneously or in response to a request from the sender of DO
+   - Only the sender of DO may send requests (IAC SB STATUS SEND IAC SE)
+   - Only the sender of WILL may transmit actual status information
+     (within an IAC SB STATUS IS ... IAC SE command)
+
+3. IS has the subcommands WILL, DO and SB. They are used EXACTLY as
+   used during the actual negotiation of TELNET options, except that
+   SB is terminated with SE, rather than IAC SE.
+
+4. Transmission of SE as a regular data byte is accomplished by
+   doubling the byte (SE SE).
+
+5. Options that are not explicitly described are assumed to be in
+   their default states.
+
+6. A single IAC SB STATUS IS ... IAC SE describes the condition of
+   ALL options.
+
+Example Usage
+-------------
+
+Host1: IAC DO STATUS
+Host2: IAC WILL STATUS
+   (Host2 is now free to send status information at any time)
+Host1: IAC SB STATUS SEND IAC SE
+Host2: IAC SB STATUS IS
+      WILL ECHO
+      DO SUPPRESS-GO-AHEAD
+      WILL STATUS
+      DO STATUS
+      IAC SE
+
+Explanation: Host2 is responsible for echoing back data characters,
+will not send Go-Ahead signals, and will both issue and request
+Status information.
+
+===============================================================================

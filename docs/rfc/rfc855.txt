@@ -1,0 +1,211 @@
+RFC 855
+===============================================================================
+
+TELENET OPTION SPECIFICATIONS
+
+Status of this Memo
+
+   This RFC specifies a standard for the ARPA Internet community.
+   Hosts on the ARPA Internet are expected to adopt and implement
+   this standard.
+
+   This RFC was written at USC-ISI by the Network Working Group
+   (NWG) of the Information Processing Techniques Office (IPTO)
+   of the Advanced Research Projects Agency (ARPA), Department
+   of Defense.
+
+   The Network Working Group is chaired by Professor S. Crocker.
+
+TELNET Option Specification Overview
+------------------------------------
+
+The intent of providing for options in the TELNET Protocol is to permit
+hosts to obtain more elegant solutions to the problems of communication
+between dissimilar devices than is possible within the framework
+provided by the Network Virtual Terminal (NVT).
+
+It should be possible for hosts to invent, test, or discard options at
+will.  Nevertheless, it is envisioned that options which prove to be
+generally useful will eventually be supported by many hosts; therefore
+it is desirable that options should be carefully documented and well
+publicized.
+
+Option Code Assignment
+----------------------
+
+Option codes are assigned by:
+
+   Jonathan B. Postel
+   University of Southern California
+   Information Sciences Institute (USC-ISI)
+   4676 Admiralty Way
+   Marina Del Rey, California 90291
+   Phone: (213) 822-1511
+   Mailbox: POSTEL@USC-ISIF
+
+Documentation Requirements
+--------------------------
+
+Documentation of options should contain at least the following sections:
+
+1. Command Name and Option Code
+2. Command Meanings
+3. Default Specification
+4. Motivation
+5. Description (or Implementation Rules)
+
+Subnegotiation
+--------------
+
+Some options require more information to be passed between hosts than
+a single option code.  The strategy consists of two steps:
+
+1. Both parties agree to "discuss" the parameter(s)
+2. The "discussion" takes place
+
+The first step, agreeing to discuss the parameters, takes place in the
+normal manner; one party proposes use of the option by sending a DO
+(or WILL) followed by the option code, and the other party accepts by
+returning a WILL (or DO) followed by the option code.
+
+Once both parties have agreed to use the option, subnegotiation takes
+place by using:
+
+   IAC SB <option-code> <parameters> IAC SE
+
+Each party is presumed to be able to parse the parameter(s), since
+each has indicated that the option is supported.
+
+The receiver may locate the end of a parameter string by searching
+for the SE command (IAC SE), even if unable to parse the parameters.
+
+Either party may refuse to pursue further subnegotiation at any time
+by sending a WON'T or DON'T to the other party.
+
+Option Code Assignments
+-----------------------
+
+The following option codes have been assigned:
+
+   Code  Name                              Reference
+   ----  ----                              ---------
+    0    NOP                               No Operation
+    1    ECHO                              Echo
+    2    RCTE                              Reply To Can't Tell Echo
+    3    NAOG                              Negotiate About Option to Go Ahead
+    4    SUPPRESS GO AHEAD                 Suppress Go Ahead
+    5    TM                                Timing Mark
+    6    RCTM                              Reply To Timing Mark
+    7    XASCII                            Extended ASCII
+    8    LOGOUT                            Logout
+    9     BM                                Byte Macro
+   10     DATM                            Data Term Mark
+   11     TERM                            Terminal Type
+   12     EOR                             End or Record
+   13     TUID                            TTY User ID
+   14     OUTMRK                          Output Mark
+   15     TTYLOC                          Terminal Location Number
+   16     AUTH                            Authentication
+   17     TAINT                           Taint Check
+   18     XLOC                            Terminal Location Number
+   19     NVTOP                           NVT Options
+   20     XAUTH                           Extended Authentication
+   21     CHARSETS                        Character Sets
+   22     SASL                            Simple Authentication and Security Layer
+   23     REMOTE-CONTROLLED-DEVICE        Remote Controlled Device
+   24     TERMINAL-TYPE                   Terminal Type
+   25     END OF RECORD                   End of Record
+   26     IAC                            Interpret As Command (Escape)
+   27     BINARY                          Binary Transfer
+   28     TACACS                          TACACS Access Control
+   29     OMTDATA                         Output Mark Time
+   30     OMTEXT                          Output Mark Text
+   31     LINEMODE                        Line Mode
+   32     XDISPLOC                        Display Location
+   33     ENVIRON                         Environment
+   34     AUTHENTICATION                  Authentication
+   35     ENCRYPT                         Encryption
+   36     SSL                             Secure Sockets Layer
+   37     TACACS2                         TACACS Version 2
+   38     TELL-NAME                       Tell Name
+   39     USER-ID                         User ID
+   40     COMPRESS                        Compression
+   41     MODIFY-ACK                      Modify Acknowledgement
+   42     NEW-ENVIRON                     New Environment
+   43     VENDOR-SPECIFIC                 Vendor Specific
+   44     VENDOR-DEFINED                  Vendor Defined
+   45     FORCE-TOKENIZATION              Force Tokenization
+   46     TOKENIZATION                    Tokenization
+   47     TELNET-INDEX                    Telnet Index
+   48     SERVER-IDENTIFICATION           Server Identification
+   49     CHARSET                         Character Set
+   50     TELL-USER-NAME                  Tell User Name
+   51     ACCOUNTING                      Accounting
+   52     SECURITY                        Security
+   53     TTYTYPE                         Terminal Type
+   54     XON-XOFF                        XON/XOFF Flow Control
+   55     TERMINAL-SCREEN-SIZE            Terminal Screen Size
+   56     TERMINAL-MODE                   Terminal Mode
+   57     TERMINAL-KEYBOARD               Terminal Keyboard
+   58     TERMINAL-CONTROL                Terminal Control
+   59     TERMINAL-BELL                     Terminal Bell
+   60     TERMINAL-VISUAL                   Terminal Visual
+   61     TERMINAL-PRINT                  Terminal Print
+   62     TERMINAL-LINE-MODE              Terminal Line Mode
+   63     TERMINAL-STATUS                 Terminal Status
+   64     TERMINAL-ATTRIBUTES             Terminal Attributes
+   65     TERMINAL-CHARACTER-SET          Terminal Character Set
+   66     TERMINAL-VIDEO-SETTINGS         Terminal Video Settings
+   67     TERMINAL-COLOR-SETTINGS         Terminal Color Settings
+   68     TERMINAL-COMMANDS               Terminal Commands
+   69     TERMINAL-SOUND                  Terminal Sound
+   70     TERMINAL-HARDWARE               Terminal Hardware
+   71     TERMINAL-SOFTWARE               Terminal Software
+   72     TERMINAL-OPERATING-SYSTEM       Terminal Operating System
+   73     TERMINAL-CONNECTION             Terminal Connection
+   74     TERMINAL-SESSION                Terminal Session
+   75     TERMINAL-USER-INTERFACE         Terminal User Interface
+   76     TERMINAL-ACCESS-CONTROL         Terminal Access Control
+   77     TERMINAL-SECURITY               Terminal Security
+   78     TERMINAL-AUDITING               Terminal Auditing
+   79     TERMINAL-LOGGING                Terminal Logging
+   80     TERMINAL-MONITORING             Terminal Monitoring
+   81     TERMINAL-DEBUGGING              Terminal Debugging
+   82     TERMINAL-TESTING                Terminal Testing
+   83     TERMINAL-CONFIGURATION          Terminal Configuration
+   84     TERMINAL-MAINTENANCE            Terminal Maintenance
+   85     TERMINAL-UPGRADE                Terminal Upgrade
+   86     TERMINAL-PATCH                  Terminal Patch
+   87     TERMINAL-FIX                    Terminal Fix
+   88     TERMINAL-UPDATE                 Terminal Update
+   89     TERMINAL-VERSION                Terminal Version
+   90     TERMINAL-RELEASE                Terminal Release
+   91     TERMINAL-STATUS-CODE            Terminal Status Code
+   92     TERMINAL-ERROR-CODE             Terminal Error Code
+   93     TERMINAL-WARNING-CODE           Terminal Warning Code
+   94     TERMINAL-INFO-CODE              Terminal Info Code
+   95     TERMINAL-DEBUG-CODE             Terminal Debug Code
+   96     TERMINAL-TEST-CODE              Terminal Test Code
+   97     TERMINAL-CONFIG-CODE            Terminal Config Code
+   98     TERMINAL-MAINT-CODE             Terminal Maint Code
+   99     TERMINAL-UPG-CODE               Terminal UPG Code
+
+Subnegotiation Command Format
+-----------------------------
+
+For option "ABC" requiring subnegotiation:
+
+   IAC WILL ABC
+      Offer to use option ABC (or favorable acknowledgment)
+
+   IAC DO ABC
+      Request for other party to use option ABC (or favorable acknowledgment)
+
+   IAC SB ABC <parameters> IAC SE
+      One step of subnegotiation, used by either party
+
+Design considerations for subnegotiation:
+- Avoid unending loops in the subnegotiation process
+- If parameters include byte value 255 (IAC), double it per TELNET rules
+
+===============================================================================

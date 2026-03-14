@@ -1,0 +1,115 @@
+RFC 854
+===============================================================================
+
+TELENET PROTOCOL SPECIFICATION
+
+Status of this Memo
+
+   This memo provides information for the Internet community.  This memo
+   does not specify an Internet standard of any kind.  Discussion for
+   this protocol is continuing.  Distribution of this memo is unlimited.
+
+   This RFC was written at UCLA under contract to ARPA by the Network
+   Working Group (NWG) of the Information Processing Techniques Office
+   (IPTO) of the Advanced Research Projects Agency (ARPA), Department
+   of Defense.
+
+   The Network Working Group is chaired by Professor S. Crocker.
+
+   The Telnet Protocol was originally designed to provide a
+   bidirectional, 8-bit byte-oriented connection between a user's
+   terminal and a remote host.  The protocol allows for negotiation
+   of various options during the connection establishment phase.
+
+Telnet Protocol Overview
+------------------------
+
+The Telnet protocol is designed to provide a fairly general
+bidirectional 8-bit byte-oriented data transport facility.  It
+supports the concept of a "network virtual terminal" (NVT) which
+serves as a standard interface between different terminal types.
+
+The protocol operates over TCP port 23 by default.
+
+Telnet Protocol Structure
+-------------------------
+
+The Telnet protocol consists of:
+
+1. Data - 8-bit bytes representing user input/output
+2. Control - Commands and options for connection negotiation
+
+The Telnet protocol uses a three-way handshake mechanism for option
+negotiation:
+
+- WILL: "I want to enable this option"
+- WON'T: "I do not want to enable this option"
+- DO: "I want you to enable this option"
+- DONT: "I do not want you to enable this option"
+
+Telnet Options
+--------------
+
+Telnet options are negotiated during the connection setup and can be
+enabled or disabled at any time during the connection.
+
+Common Telnet options include:
+
+- ECHO (option code 1): Echo user input locally
+- SUPPRESS GO AHEAD (option code 3): Disable SGa transmissions
+- BINARY (option code 8): Transfer data as binary (8-bit)
+- TERMINAL TYPE (option code 24): Identify terminal type
+- NAWS (option code 31): Negotiate Window Size
+- LINEMODE (option code 34): Line mode operation
+
+Telnet Command Structure
+------------------------
+
+Telnet commands are encoded as:
+
+  IAC (Interpret As Command) - 255 (0xFF)
+  Command/Option - 1 byte
+  Option parameter (if applicable) - 1 byte
+
+Example: IAC SB (Subnegotiation Begin)
+       IAC SE (Subnegotiation End)
+
+Telnet Data Transmission
+------------------------
+
+Data is transmitted as 8-bit bytes.  When the data byte equals IAC
+(255), it must be doubled (IAC IAC) to represent a literal IAC byte
+in the data stream.
+
+Telnet Connection Lifecycle
+---------------------------
+
+1. Connection Establishment (TCP handshake)
+2. Option Negotiation (WILL/WONT/DO/DONT exchanges)
+3. Data Transfer (application data)
+4. Connection Termination (TCP close)
+
+Security Considerations
+-----------------------
+
+Telnet transmits data in cleartext, including passwords.  For secure
+connections, SSH or TLS should be used instead.
+
+References
+----------
+
+[1]  Postel, J., "Telnet Protocol Specification", RFC 854, 1983.
+[2]  Postel, J., "Telnet Option Specifications", RFC 855, 1983.
+
+Author's Address
+----------------
+
+Jon Postel
+Information Sciences Institute
+University of Southern California
+4676 Admiralty Way
+Marina del Rey, CA 90291
+
+Phone: (213) 822-1511
+
+===============================================================================

@@ -1,0 +1,136 @@
+RFC 856
+===============================================================================
+
+TELENET BINARY TRANSMISSION
+
+Status of this Memo
+
+   This RFC specifies a standard for the ARPA Internet community.
+   Hosts on the ARPA Internet are expected to adopt and implement
+   this standard.
+
+   This RFC was written at USC-ISI by the Network Working Group
+   (NWG) of the Information Processing Techniques Office (IPTO)
+   of the Advanced Research Projects Agency (ARPA), Department
+   of Defense.
+
+   The Network Working Group is chaired by Professor S. Crocker.
+
+Command Name and Code
+---------------------
+
+   TRANSMIT-BINARY      0
+
+Command Meanings
+----------------
+
+IAC WILL TRANSMIT-BINARY
+   The sender of this command REQUESTS permission to begin transmitting,
+   or confirms that it will now begin transmitting characters which are
+   to be interpreted as 8 bits of binary data by the receiver of the data.
+
+IAC WON'T TRANSMIT-BINARY
+   If the connection is already being operated in binary transmission
+   mode, the sender of this command DEMANDS to begin transmitting data
+   characters which are to be interpreted as standard NVT ASCII characters
+   by the receiver of the data.  If the connection is not already being
+   operated in binary transmission mode, the sender of this command
+   REFUSES to begin transmitting characters which are to be interpreted
+   as binary characters by the receiver of the data.
+
+IAC DO TRANSMIT-BINARY
+   The sender of this command REQUESTS that the sender of the data start
+   transmitting, or confirms that the sender of data is expected to
+   transmit, characters which are to be interpreted as 8 bits of binary
+   data.
+
+IAC DON'T TRANSMIT-BINARY
+   If the connection is already being operated in binary transmission
+   mode, the sender of this command DEMANDS that the sender of the data
+   start transmitting characters which are to be interpreted as standard
+   NVT ASCII characters by the receiver of the data.
+
+Default
+-------
+
+   WON'T TRANSMIT-BINARY
+   DON'T TRANSMIT-BINARY
+
+   The connection is not operated in binary mode.
+
+Motivation for the Option
+-------------------------
+
+It is sometimes useful to have available a binary transmission path
+within TELNET without having to utilize one of the more efficient,
+higher level protocols providing binary transmission (such as the
+File Transfer Protocol).  The use of the IAC prefix within the basic
+TELNET protocol provides the option of binary transmission in a
+natural way, requiring only the addition of a mechanism by which the
+parties involved can agree to INTERPRET the characters transmitted
+over a TELNET connection as binary data.
+
+Description of the Option
+-------------------------
+
+With the binary transmission option in effect, the receiver should
+interpret characters received from the transmitter which are not
+preceded with IAC as 8 bit binary data, with the exception of IAC
+followed by IAC which stands for the 8 bit binary data with the
+decimal value 255.
+
+IAC followed by an effective TELNET command (plus any additional
+characters required to complete the command) is still the command
+even with the binary transmission option in effect.
+
+IAC followed by a character which is not a defined TELNET command has
+the same meaning as IAC followed by NOP.
+
+Implementation Suggestions
+--------------------------
+
+1. Implementations may choose to refuse some other options (such as
+   EBCDIC transmission) while the binary transmission option is in effect.
+
+2. If a pair of hosts can understand being in binary transmission mode
+   simultaneous with being in echo mode, then it is acceptable to
+   negotiate that combination.
+
+3. WON'T and DON'T meanings are dependent on whether the connection
+   is presently being operated in binary mode or not.
+
+4. When a connection is not presently operating in binary mode, the
+   default interpretation of WON'T and DON'T is to continue operating
+   in the current mode (NVT ASCII, EBCDIC, or some other mode).
+
+5. Once a connection is operating in binary mode (as agreed to by both
+   ends), a WON'T or DON'T causes the encoding method to revert to
+   NVT ASCII.
+
+6. TELNET connection is a two-way communication channel.  Binary
+   transmission mode must be negotiated separately for each direction
+   of data flow.
+
+7. Implementation must follow the loop preventing rules given in the
+   TELNET Protocol Specification.
+
+Considerations for Binary Transmission:
+
+a. Binary transmission from a terminal
+   - Consider how a terminal is allowed to generate all eight bit
+     characters, ignoring parity considerations, etc.
+
+b. Binary transmission to a process
+   - Consider how all characters are passed to a process
+   - Monitor may intercept certain characters (e.g., ETX, control-C)
+
+c. Binary transmission from a process
+   - Consider how a process is allowed to send all eight bit characters
+   - Monitor may convert certain non-printing characters
+
+d. Binary transmission to a terminal
+   - Consider how all characters received are sent to a local terminal
+   - May involve addition of timing characters, parity calculations,
+     and code conversion
+
+===============================================================================
