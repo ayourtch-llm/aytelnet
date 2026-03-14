@@ -14,9 +14,7 @@ use aytelnet::{TelnetConnection, TelnetEvent, OPT_ECHO, OPT_BINARY};
 use std::env;
 use std::error::Error;
 use std::io::Write;
-use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -54,34 +52,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     
     println!("Options negotiated!");
     
-    // Create channels for communication
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<TelnetEvent>(100);
-    
-    // Wrap connection in Arc<Mutex<>> for shared ownership
-    let client = Arc::new(Mutex::new(client));
-    
-    // Clone the channel sender for the background task
-    let tx_clone = tx.clone();
-    let client_clone = Arc::clone(&client);
-    
-    // Spawn task to handle incoming data
-    let handle = tokio::spawn(async move {
-        loop {
-            let mut conn = client_clone.lock().await;
-            match conn.receive().await {
-                Ok(event) => {
-                    if tx_clone.send(event).await.is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Receive error: {}", e);
-                    break;
-                }
-            }
-        }
-    });
-    
     // Main event loop - handle user input and received events
     println!("\n--- TELNET Session ---");
     println!("Type 'quit' to disconnect");
@@ -92,11 +62,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut stdin_reader = BufReader::new(stdin);
     
     loop {
+        // Use select to handle both input and server events concurrently
         tokio::select! {
             // Handle incoming TELNET events
-            event = rx.recv() => {
+            event = client.receive() => {
                 match event {
-                    Some(TelnetEvent::Data(data)) => {
+                    Ok(TelnetEvent::Data(data)) => {
                         // Print received data
                         if let Ok(text) = String::from_utf8(data.clone()) {
                             print!("{}", text);
@@ -110,29 +81,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             println!("]");
                         }
                     }
-                    Some(TelnetEvent::Command(cmd)) => {
+                    Ok(TelnetEvent::Command(cmd)) => {
                         println!("\n[Command: {:?}]\n", cmd);
                     }
-                    Some(TelnetEvent::OptionNegotiated { option, enabled }) => {
+                    Ok(TelnetEvent::OptionNegotiated { option, enabled }) => {
                         println!("[Option {:02x?}: {}]\n", option, if enabled { "enabled" } else { "disabled" });
                     }
-                    Some(TelnetEvent::Closed) => {
+                    Ok(TelnetEvent::Closed) => {
                         println!("\n[Connection closed]");
                         break;
                     }
-                    Some(TelnetEvent::Error(e)) => {
+                    Ok(TelnetEvent::Error(e)) => {
                         println!("\n[Error: {}]", e);
                         break;
                     }
-                    None => {
+                    Err(e) => {
+                        println!("\n[Error: {}]", e);
                         break;
                     }
                 }
             }
             
             // Handle user input
-            read_input = read_line(&mut stdin_reader) => {
-                match read_input {
+            result = read_line(&mut stdin_reader) => {
+                match result {
                     Ok(input) => {
                         // Check for quit command
                         if input.trim().to_lowercase() == "quit" {
@@ -148,8 +120,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         };
                         
                         if !send_data.is_empty() {
-                            let mut conn = client.lock().await;
-                            if let Err(e) = conn.send(send_data.as_bytes()).await {
+                            if let Err(e) = client.send(send_data.as_bytes()).await {
                                 eprintln!("Send error: {}", e);
                             }
                         }
@@ -163,12 +134,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     
-    // Cancel the receive task
-    handle.abort();
-    
     // Disconnect
-    let mut conn = client.lock().await;
-    conn.disconnect().await?;
+    client.disconnect().await?;
     println!("Disconnected from server.");
     
     Ok(())

@@ -156,7 +156,12 @@ impl TelnetDecoder {
             
             DecodeState::SbData => {
                 if byte == IAC {
+                    // Could be start of SE or IAC escape
                     self.state = DecodeState::SbSe;
+                    None
+                } else if byte == SE {
+                    // Unexpected SE without IAC, treat as data
+                    self.sb_data.push(byte);
                     None
                 } else {
                     self.sb_data.push(byte);
@@ -166,6 +171,7 @@ impl TelnetDecoder {
             
             DecodeState::SbSe => {
                 if byte == SE {
+                    // End of subnegotiation
                     let cmd = TelnetCommand::Subnegotiation {
                         option: self.sb_data[0],
                         data: self.sb_data[1..].to_vec(),
@@ -176,7 +182,7 @@ impl TelnetDecoder {
                 } else if byte == IAC {
                     // IAC IAC in subnegotiation represents a literal IAC byte
                     self.sb_data.push(IAC);
-                    self.state = DecodeState::SbData;
+                    // Stay in SbSe to wait for SE or another IAC
                     None
                 } else {
                     // Unexpected byte after IAC, treat as data

@@ -31,6 +31,7 @@
 pub mod connection;
 pub mod decoder;
 pub mod encoder;
+mod decoder_persistence_tests;
 pub mod error;
 pub mod options;
 pub mod protocol;

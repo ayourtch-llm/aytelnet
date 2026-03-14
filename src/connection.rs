@@ -1,10 +1,9 @@
 //! TELNET connection manager.
 //!
-//! This module handles the TCP connection and async read/write tasks.
+//! This module provides a simple TELNET connection with explicit state machine handling.
 
-use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, Mutex};
 
 use crate::decoder::TelnetDecoder;
 use crate::encoder::TelnetEncoder;
@@ -14,12 +13,13 @@ use crate::options::OptionNegotiator;
 use crate::state::StateManager;
 use crate::types::{TelnetCommand, TelnetEvent};
 
-/// TELNET connection.
+/// TELNET connection with explicit state machine handling.
 ///
-/// Manages the TCP connection and async read/write tasks.
+/// This connection handles I/O directly without separate tasks,
+/// making the state machine explicit and easier to reason about.
 pub struct TelnetConnection {
-    /// TCP stream (wrapped in Arc<Mutex<>> for shared ownership)
-    stream: Arc<Mutex<Option<TcpStream>>>,
+    /// TCP stream
+    stream: Option<TcpStream>,
     
     /// State manager
     state_manager: StateManager,
@@ -30,37 +30,27 @@ pub struct TelnetConnection {
     /// Data encoder
     encoder: TelnetEncoder,
     
-    /// Data decoder
+    /// Data decoder (preserves state across reads)
     decoder: TelnetDecoder,
-    
-    /// Send channel for commands to write task
-    tx: mpsc::Sender<Vec<u8>>,
-    
-    /// Receive channel for events from read task
-    rx: mpsc::Receiver<TelnetEvent>,
 }
 
 impl TelnetConnection {
     /// Create a new connection.
     pub fn new() -> Self {
         Self {
-            stream: Arc::new(Mutex::new(None)),
+            stream: None,
             state_manager: StateManager::new(),
             option_negotiator: OptionNegotiator::new(),
             encoder: TelnetEncoder::new(),
             decoder: TelnetDecoder::new(),
-            tx: mpsc::channel(64).0,
-            rx: mpsc::channel(64).1,
         }
     }
 
     /// Connect to a TELNET server.
     pub async fn connect(host: &str, port: u16) -> Result<Self> {
-        let mut conn = Self::new();
-        conn.state_manager.set_connection_state(crate::types::ConnectionState::Connecting);
-        
         let stream = TcpStream::connect((host, port)).await?;
-        *conn.stream.lock().await = Some(stream);
+        let mut conn = Self::new();
+        conn.stream = Some(stream);
         conn.state_manager.set_connection_state(crate::types::ConnectionState::Connected);
         
         Ok(conn)
@@ -112,31 +102,53 @@ impl TelnetConnection {
     /// Send a TELNET command.
     pub async fn send_command(&mut self, command: &TelnetCommand) -> Result<()> {
         let encoded = TelnetEncoder::encode_command(command);
-        self.tx.send(encoded).await.map_err(|e| {
-            TelnetError::ChannelSend(e.to_string())
-        })?;
+        if let Some(stream) = &mut self.stream {
+            stream.write_all(&encoded).await?;
+            stream.flush().await?;
+        }
         Ok(())
     }
 
     /// Send data to the server.
     pub async fn send(&mut self, data: &[u8]) -> Result<()> {
         let encoded = TelnetEncoder::encode_data(data);
-        self.tx.send(encoded).await.map_err(|e| {
-            TelnetError::ChannelSend(e.to_string())
-        })?;
+        if let Some(stream) = &mut self.stream {
+            stream.write_all(&encoded).await?;
+            stream.flush().await?;
+        }
         Ok(())
     }
 
     /// Receive an event from the server.
+    ///
+    /// This reads from the stream and decodes TELNET commands.
+    /// The decoder maintains state across calls, so commands spanning
+    /// multiple reads are handled correctly.
     pub async fn receive(&mut self) -> Result<TelnetEvent> {
-        self.rx.recv().await.ok_or(TelnetError::ChannelRecv(
-            "channel closed".to_string()
-        ))
+        let stream = self.stream.as_mut().ok_or(TelnetError::Disconnected)?;
+        
+        // Read a single byte to get events one at a time
+        let mut buffer = [0u8; 1];
+        stream.read(&mut buffer).await?;
+        
+        // Decode the byte
+        if let Some(cmd) = self.decoder.decode_byte(buffer[0]) {
+            Ok(match cmd {
+                TelnetCommand::Data(byte) => TelnetEvent::Data(vec![byte]),
+                TelnetCommand::Subnegotiation { option, data } => {
+                    TelnetEvent::Command(TelnetCommand::Subnegotiation { option, data })
+                }
+                _ => TelnetEvent::Command(cmd),
+            })
+        } else {
+            // No complete command yet, return as data
+            Ok(TelnetEvent::Data(buffer.to_vec()))
+        }
     }
 
     /// Disconnect from the server.
     pub async fn disconnect(&mut self) -> Result<()> {
-        *self.stream.lock().await = None;
+        self.stream = None;
         self.state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
         Ok(())
     }
@@ -149,6 +161,16 @@ impl TelnetConnection {
     /// Check if connected.
     pub fn is_connected(&self) -> bool {
         self.state_manager.connection_state() == crate::types::ConnectionState::Connected
+    }
+
+    /// Get a reference to the decoder for testing/debugging.
+    pub fn get_decoder(&self) -> &TelnetDecoder {
+        &self.decoder
+    }
+
+    /// Get a mutable reference to the decoder for testing/debugging.
+    pub fn get_decoder_mut(&mut self) -> &mut TelnetDecoder {
+        &mut self.decoder
     }
 }
 
