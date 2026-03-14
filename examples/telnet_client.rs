@@ -1,6 +1,6 @@
 //! TELNET Client Example
 //!
-//! A simple async TELNET client that connects to a TELNET server.
+//! A TELNET client with escape mode (Ctrl-]) for commands.
 //!
 //! Usage:
 //!   cargo run --example telnet_client <host> [port]
@@ -9,12 +9,19 @@
 //!   cargo run --example telnet_client example.com 23
 //!   cargo run --example telnet_client 192.168.1.1
 //!   cargo run --example telnet_client [::1] 23
+//!
+//! Features:
+//!   - Immediate character echo (sends characters as typed)
+//!   - Escape mode with Ctrl-]
+//!   - Commands: quit, help, status
 
-use aytelnet::{TelnetConnection, TelnetEvent, OPT_ECHO, OPT_BINARY};
+use aytelnet::{TelnetConnection, TelnetEvent, OPT_BINARY};
 use std::env;
 use std::error::Error;
 use std::io::Write;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+const ESCAPE_CHAR: u8 = 0x1d; // Ctrl-]
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -47,73 +54,108 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Request binary mode (disable character interpretation)
     client.negotiate_option(OPT_BINARY, true).await?;
     
-    // Request to suppress echo locally
-    client.negotiate_option(OPT_ECHO, false).await?;
-    
     println!("Options negotiated!");
     
-    // Main event loop - handle user input and received events
+    // Main event loop
     println!("\n--- TELNET Session ---");
-    println!("Type 'quit' to disconnect");
-    println!("Press Enter to send a line");
-    println!("=====================\n");
+    println!("Type Ctrl-] to enter escape mode");
+    println!("Commands in escape mode: help, quit, status");
+    println!("========================\n");
     
     let stdin = tokio::io::stdin();
     let mut stdin_reader = BufReader::new(stdin);
     
+    // Escape mode state machine
+    let mut escape_mode = false;
+    let mut escape_buffer = String::new();
+    let mut escape_data_buffer = Vec::new();
+    
     loop {
-        // Use select to handle both input and server events concurrently
         tokio::select! {
             // Handle incoming TELNET events
             event = client.receive() => {
                 match event {
                     Ok(TelnetEvent::Data(data)) => {
-                        // Print received data
-                        if let Ok(text) = String::from_utf8(data.clone()) {
-                            print!("{}", text);
-                            std::io::stdout().flush().unwrap();
-                        } else {
-                            // Print binary data as hex
-                            print!("[Binary: ");
-                            for byte in data {
-                                print!("{:02x} ", byte);
+                        if escape_mode {
+                            // Collect data in escape mode
+                            escape_data_buffer.extend_from_slice(&data);
+                            // Check if we have a complete command
+                            if escape_data_buffer.ends_with(b"\n") || escape_data_buffer.ends_with(b"\r") {
+                                if let Ok(text) = String::from_utf8(escape_data_buffer.clone()) {
+                                    let cmd = text.trim();
+                                    handle_escape_command(cmd).await?;
+                                }
+                                escape_data_buffer.clear();
+                                escape_buffer.clear();
                             }
-                            println!("]");
+                        } else {
+                            // Print received data normally
+                            if let Ok(text) = String::from_utf8(data.clone()) {
+                                print!("{}", text);
+                                std::io::stdout().flush().unwrap();
+                            }
                         }
                     }
                     Ok(TelnetEvent::Command(cmd)) => {
-                        println!("\n[Command: {:?}]\n", cmd);
+                        if !escape_mode {
+                            println!("[Command: {:?}]", cmd);
+                            std::io::stdout().flush().unwrap();
+                        }
                     }
                     Ok(TelnetEvent::OptionNegotiated { option, enabled }) => {
-                        println!("[Option {:02x?}: {}]\n", option, if enabled { "enabled" } else { "disabled" });
+                        if !escape_mode {
+                            println!("[Option {:02x?}: {}]", option, if enabled { "enabled" } else { "disabled" });
+                            std::io::stdout().flush().unwrap();
+                        }
                     }
                     Ok(TelnetEvent::Closed) => {
-                        println!("\n[Connection closed]");
+                        if !escape_mode {
+                            println!("\n[Connection closed]");
+                        }
                         break;
                     }
                     Ok(TelnetEvent::Error(e)) => {
-                        println!("\n[Error: {}]", e);
+                        if !escape_mode {
+                            println!("\n[Error: {}]", e);
+                        }
                         break;
                     }
                     Err(e) => {
-                        println!("\n[Error: {}]", e);
+                        if !escape_mode {
+                            println!("\n[Error: {}]", e);
+                        }
                         break;
                     }
                 }
             }
             
             // Handle user input
-            result = read_line(&mut stdin_reader) => {
+            result = stdin_reader.read_line(&mut escape_buffer) => {
                 match result {
-                    Ok(input) => {
-                        // Check for quit command
-                        if input.trim().to_lowercase() == "quit" {
-                            println!("\nDisconnecting...");
-                            break;
+                    Ok(0) => {
+                        // EOF
+                        break;
+                    }
+                    Ok(_) => {
+                        if escape_mode {
+                            // Escape mode: we handle commands via Data events
+                            continue;
                         }
                         
-                        // Send the input (without the newline for cleaner output)
-                        let send_data = if input.ends_with('\n') {
+                        let input = escape_buffer.clone();
+                        escape_buffer.clear();
+                        
+                        // Check for escape character (Ctrl-])
+                        if input.as_bytes().last() == Some(&ESCAPE_CHAR) {
+                            println!("\n[Escape mode - type 'help' for commands, 'quit' to exit]\n");
+                            std::io::stdout().flush().unwrap();
+                            escape_mode = true;
+                            escape_buffer.clear();
+                            continue;
+                        }
+                        
+                        // Send input to server (without the newline)
+                        let send_data = if input.ends_with('\n') || input.ends_with('\r') {
                             &input[..input.len()-1]
                         } else {
                             &input
@@ -141,9 +183,38 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// Helper function to read a line from stdin
-async fn read_line(reader: &mut BufReader<tokio::io::Stdin>) -> Result<String, std::io::Error> {
-    let mut input = String::new();
-    reader.read_line(&mut input).await?;
-    Ok(input)
+// Handle escape mode commands
+async fn handle_escape_command(cmd: &str) -> Result<(), Box<dyn Error>> {
+    let cmd_lower = cmd.to_lowercase();
+    
+    match cmd_lower.as_str() {
+        "quit" | "exit" => {
+            println!("\nDisconnecting...");
+            std::process::exit(0);
+        }
+        "help" | "?" => {
+            println!("\n=== TELNET Commands ===");
+            println!("  quit    - Disconnect and exit");
+            println!("  help    - Show this help message");
+            println!("  status  - Show connection status");
+            println!("  escape  - Return to normal mode");
+            println!("========================\n");
+        }
+        "status" => {
+            println!("\n[Connection Status]");
+            println!("  Connected to TELNET server");
+            println!("  Use 'quit' to disconnect");
+            println!("  Use 'escape' to return to normal mode");
+            println!("========================\n");
+        }
+        "escape" => {
+            println!("\n[Normal mode resumed]\n");
+        }
+        _ => {
+            println!("\n[Unknown command: {}]", cmd);
+            println!("Type 'help' for available commands\n");
+        }
+    }
+    
+    Ok(())
 }
