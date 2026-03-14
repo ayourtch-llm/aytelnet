@@ -15,7 +15,7 @@
 //!   - Escape mode with Ctrl-]
 //!   - Commands: quit, help, status
 
-use aytelnet::{TelnetConnection, TelnetEvent, OPT_BINARY};
+use aytelnet::{TelnetConnection, TelnetEvent, OPT_BINARY, OPT_ECHO};
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -58,13 +58,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Request binary mode (disable character interpretation)
     client.negotiate_option(OPT_BINARY, true).await?;
     
+    // Request NO ECHO - let client handle local echo
+    client.negotiate_option(OPT_ECHO, false).await?;
+    
     println!("Options negotiated!");
-    
-    // Setup terminal in raw mode
-    terminal::enable_raw_mode()?;
-    
-    // Enter alternate screen
-    execute!(io::stdout(), EnterAlternateScreen)?;
     
     // Main event loop
     println!("\n--- TELNET Session ---");
@@ -209,12 +206,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     }
                                 }
                                 KeyCode::Backspace | KeyCode::Delete => {
-                                    // Show backspace effect locally
-                                    let _ = execute!(io::stdout(), cursor::MoveToColumn(0));
-                                    let _ = execute!(io::stdout(), Clear(ClearType::UntilNewLine));
-                                    // Move cursor back one position
-                                    let _ = execute!(io::stdout(), cursor::MoveToPreviousLine(0));
-                                    let _ = execute!(io::stdout(), cursor::MoveToNextLine(0));
+                                    // Show backspace effect locally - move cursor back
                                     let _ = execute!(io::stdout(), cursor::MoveLeft(1));
                                     let _ = execute!(io::stdout(), Print(" "));
                                     let _ = execute!(io::stdout(), cursor::MoveLeft(1));
@@ -242,13 +234,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
-    
-    // Cleanup
-    // Leave alternate screen
-    execute!(io::stdout(), LeaveAlternateScreen)?;
-    
-    // Restore terminal
-    terminal::disable_raw_mode()?;
     
     // Disconnect
     client.disconnect().await?;
