@@ -27,8 +27,6 @@ use std::env;
 use std::error::Error;
 use std::io::{self, Write};
 
-const ESCAPE_CHAR: u8 = 0x1d; // Ctrl-]
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // Parse command line arguments
@@ -59,9 +57,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     
     // Request binary mode (disable character interpretation)
     client.negotiate_option(OPT_BINARY, true).await?;
-    
-    // Request ECHO from server (let server handle echo)
-    client.negotiate_option(aytelnet::OPT_ECHO, true).await?;
     
     println!("Options negotiated!");
     
@@ -104,9 +99,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         } else {
                             // Print received data normally
                             if let Ok(text) = String::from_utf8(data.clone()) {
-                                // Normalize CRLF to LF for display
-                                let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
-                                print!("{}", normalized);
+                                print!("{}", text);
                                 io::stdout().flush().unwrap();
                             }
                         }
@@ -175,7 +168,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                         let cmd = escape_buffer.trim().to_string();
                                         handle_escape_command(&cmd, &mut io::stdout(), &mut escape_buffer, &mut client).await?;
                                     }
-                                    KeyCode::Backspace => {
+                                    KeyCode::Backspace | KeyCode::Delete => {
                                         if !escape_buffer.is_empty() {
                                             escape_buffer.pop();
                                             let _ = execute!(io::stdout(), Clear(ClearType::UntilNewLine));
@@ -205,7 +198,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 continue;
                             }
                             
-                            // Normal mode: send character immediately
+                            // Normal mode: send character immediately with local echo
                             match key.code {
                                 KeyCode::Enter => {
                                     let _ = execute!(io::stdout(), Print("\n"));
@@ -215,15 +208,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                         eprintln!("Send error: {}", e);
                                     }
                                 }
-                                KeyCode::Backspace => {
-                                    // Send backspace character (0x7f)
-                                    let _ = execute!(io::stdout(), Print("\x08 \x08"));
+                                KeyCode::Backspace | KeyCode::Delete => {
+                                    // Show backspace effect locally
+                                    let _ = execute!(io::stdout(), cursor::MoveToColumn(0));
+                                    let _ = execute!(io::stdout(), Clear(ClearType::UntilNewLine));
+                                    // Move cursor back one position
+                                    let _ = execute!(io::stdout(), cursor::MoveToPreviousLine(0));
+                                    let _ = execute!(io::stdout(), cursor::MoveToNextLine(0));
+                                    let _ = execute!(io::stdout(), cursor::MoveLeft(1));
+                                    let _ = execute!(io::stdout(), Print(" "));
+                                    let _ = execute!(io::stdout(), cursor::MoveLeft(1));
                                     let _ = io::stdout().flush();
+                                    // Send backspace character (0x7f) to server
                                     if let Err(e) = client.send(&[0x7f]).await {
                                         eprintln!("Send error: {}", e);
                                     }
                                 }
                                 KeyCode::Char(c) => {
+                                    // Show character locally (echo)
+                                    let _ = execute!(io::stdout(), Print(c));
+                                    let _ = io::stdout().flush();
                                     // Send character to server
                                     if let Err(e) = client.send(c.to_string().as_bytes()).await {
                                         eprintln!("Send error: {}", e);
