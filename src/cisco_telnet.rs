@@ -767,11 +767,18 @@ impl CiscoTelnet {
         let start = std::time::Instant::now();
         let mut output = String::new();
         
-        debug!("Receiving until pattern: {:?}", String::from_utf8_lossy(pattern));
+        info!("receive_until() starting: waiting for pattern {:?} with timeout {:?}", 
+              String::from_utf8_lossy(pattern), timeout);
         
         loop {
             if start.elapsed() > timeout {
                 debug!("Timeout receiving until pattern after {:?}", start.elapsed());
+                warn!("Timeout waiting for pattern: {:?}", String::from_utf8_lossy(pattern));
+                warn!("Final buffer size: {} bytes", self.buffer.len());
+                if !self.buffer.is_empty() {
+                    let preview = String::from_utf8_lossy(&self.buffer[..self.buffer.len().min(500)]);
+                    warn!("Final buffer preview: {}", preview);
+                }
                 return Err(TelnetError::Timeout);
             }
             
@@ -780,12 +787,15 @@ impl CiscoTelnet {
                     // Convert to string, replacing invalid UTF-8
                     let text = String::from_utf8_lossy(&data);
                     output.push_str(&text);
+                    self.buffer.extend_from_slice(&data);
                     
                     debug!("Received {} bytes, total output: {} bytes", data.len(), output.len());
+                    debug!("Buffer contents: {:?}", String::from_utf8_lossy(&self.buffer));
                     
                     // Check if we've found the pattern
                     if output.contains(&String::from_utf8_lossy(pattern).as_ref()) {
                         debug!("Pattern found in output");
+                        info!("Pattern {:?} found after {:?}", String::from_utf8_lossy(pattern), start.elapsed());
                         break;
                     }
                 }
@@ -807,6 +817,7 @@ impl CiscoTelnet {
         }
         
         debug!("receive_until completed successfully, output length: {} bytes", output.len());
+        info!("receive_until() completed: received {} bytes", output.len());
         Ok(output)
     }
 

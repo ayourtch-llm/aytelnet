@@ -48,7 +48,7 @@ impl Default for CiscoConnConfig {
             password: String::new(),
             cmd: String::new(),
             timeout: Duration::from_secs(30),
-            read_timeout: Duration::from_secs(10),
+            read_timeout: Duration::from_secs(30),
             prompts: vec![
                 "Router#".to_string(),
                 "Switch#".to_string(),
