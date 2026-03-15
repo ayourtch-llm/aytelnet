@@ -564,6 +564,9 @@ impl CiscoTelnet {
                String::from_utf8_lossy(bytes), timeout);
         debug!("Buffer size at start: {} bytes", self.buffer.len());
         
+        // Use shorter timeout for polling loop to check main timeout
+        let poll_timeout = Duration::from_millis(100);
+        
         loop {
             // Check if we've timed out
             if start.elapsed() > timeout {
@@ -576,8 +579,8 @@ impl CiscoTelnet {
                 return Err(TelnetError::Timeout);
             }
             
-            // Try to receive data
-            match tokio::time::timeout(self.read_timeout, async {
+            // Try to receive data with short timeout for responsive polling
+            match tokio::time::timeout(poll_timeout, async {
                 if let Some(ref mut telnet) = self.telnet {
                     telnet.receive().await
                 } else {
@@ -618,6 +621,22 @@ impl CiscoTelnet {
                     warn!("Error receiving data: {}", e);
                     self.state = CiscoTelnetState::Error(e.to_string());
                     return Err(e);
+                }
+                Ok(Err(e)) => {
+                    warn!("Timeout receiving data: {}", e);
+                    continue;
+                }
+                Err(e) => {
+                    // tokio::time::timeout error
+                    warn!("Timeout waiting for receive: {}", e);
+                    continue;
+                }
+            }
+            
+            // Small delay to prevent busy-waiting
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
                 }
                 Ok(Err(e)) => {
                     warn!("Error in receive: {}", e);
