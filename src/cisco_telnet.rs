@@ -257,6 +257,14 @@ impl CiscoTelnet {
         self.authenticate().await?;
         debug!("Authentication successful");
         
+        // Issue "term len 0" to disable line length wrapping
+        debug!("Sending 'term len 0' command to disable line wrapping...");
+        self.send(b"term len 0\n").await?;
+        debug!("'term len 0' command sent, waiting for response...");
+        
+        // Wait for the response (should be quick)
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        
         info!("Connected and authenticated to {}", self.address);
         
         // Log initial buffer contents for debugging
