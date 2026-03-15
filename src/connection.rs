@@ -166,29 +166,32 @@ impl TelnetConnection {
         // Decode all bytes at once
         let commands = self.decoder.decode(&buffer[..bytes_read]);
         
-        // Process commands - return first non-data command, or all data as one event
-        let mut data_events: Vec<u8> = Vec::new();
+        // Separate data bytes from TELNET commands
+        let mut data_bytes: Vec<u8> = Vec::new();
+        let mut command_events: Vec<TelnetEvent> = Vec::new();
         
         for cmd in commands {
             match cmd {
                 TelnetCommand::Data(byte) => {
-                    data_events.push(byte);
+                    data_bytes.push(byte);
                 }
                 TelnetCommand::Subnegotiation { option, data } => {
-                    // Return subnegotiation immediately
-                    return Ok(TelnetEvent::Command(TelnetCommand::Subnegotiation { option, data }));
+                    command_events.push(TelnetEvent::Command(TelnetCommand::Subnegotiation { option, data }));
                 }
                 _ => {
-                    // Return other commands immediately
-                    return Ok(TelnetEvent::Command(cmd));
+                    command_events.push(TelnetEvent::Command(cmd));
                 }
             }
         }
         
-        // Return all accumulated data as a single event
-        if !data_events.is_empty() {
-            debug!("Returning {} bytes as Data event", data_events.len());
-            Ok(TelnetEvent::Data(data_events))
+        // Return the first command event if we have any
+        if let Some(first_cmd) = command_events.into_iter().next() {
+            debug!("Returning first TELNET command event");
+            Ok(first_cmd)
+        } else if !data_bytes.is_empty() {
+            // No TELNET commands, return all data
+            debug!("Returning {} bytes as Data event", data_bytes.len());
+            Ok(TelnetEvent::Data(data_bytes))
         } else {
             // No data, no commands - shouldn't happen but handle it
             debug!("No complete commands or data, returning empty");
