@@ -637,22 +637,6 @@ impl CiscoTelnet {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
-                }
-                Ok(Err(e)) => {
-                    warn!("Error in receive: {}", e);
-                    self.state = CiscoTelnetState::Error(e.to_string());
-                    return Err(e);
-                }
-                Err(_) => {
-                    debug!("Timeout waiting for data from stream");
-                    continue;
-                }
-            }
-            
-            // Small delay to prevent busy waiting
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
-    }
 
     /// Wait for login to complete.
     /// 
