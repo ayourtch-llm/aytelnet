@@ -465,6 +465,16 @@ impl CiscoTelnet {
         let start = std::time::Instant::now();
         
         debug!("Waiting for password prompt (timeout: {:?})", self.read_timeout);
+        debug!("Current buffer size: {} bytes", self.buffer.len());
+        
+        // First, check if we already have the password prompt in the buffer
+        // (this can happen if the server sent it before we called this function)
+        let buffer_str = String::from_utf8_lossy(&self.buffer);
+        if buffer_str.contains("Password:") {
+            debug!("Password prompt already found in buffer");
+            self.state = CiscoTelnetState::SendingPassword;
+            return Ok(());
+        }
         
         loop {
             if start.elapsed() > self.read_timeout {
