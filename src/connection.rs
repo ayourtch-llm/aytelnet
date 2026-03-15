@@ -166,26 +166,34 @@ impl TelnetConnection {
         // Decode all bytes at once
         let commands = self.decoder.decode(&buffer[..bytes_read]);
         
-        // Process commands
+        // Process commands - return first non-data command, or all data as one event
+        let mut data_events: Vec<u8> = Vec::new();
+        
         for cmd in commands {
             match cmd {
                 TelnetCommand::Data(byte) => {
-                    // Return first data byte as event
-                    return Ok(TelnetEvent::Data(vec![byte]));
+                    data_events.push(byte);
                 }
                 TelnetCommand::Subnegotiation { option, data } => {
+                    // Return subnegotiation immediately
                     return Ok(TelnetEvent::Command(TelnetCommand::Subnegotiation { option, data }));
                 }
                 _ => {
-                    // For other commands, return them as events
+                    // Return other commands immediately
                     return Ok(TelnetEvent::Command(cmd));
                 }
             }
         }
         
-        // No complete commands yet, return all bytes as data
-        debug!("No complete TELNET commands, returning {} bytes as data", bytes_read);
-        Ok(TelnetEvent::Data(buffer[..bytes_read].to_vec()))
+        // Return all accumulated data as a single event
+        if !data_events.is_empty() {
+            debug!("Returning {} bytes as Data event", data_events.len());
+            Ok(TelnetEvent::Data(data_events))
+        } else {
+            // No data, no commands - shouldn't happen but handle it
+            debug!("No complete commands or data, returning empty");
+            Ok(TelnetEvent::Data(Vec::new()))
+        }
     }
 
     /// Disconnect from the server.
