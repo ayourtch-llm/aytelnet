@@ -1,6 +1,8 @@
 //! TELNET connection manager.
 //!
 //! This module provides a simple TELNET connection with explicit state machine handling.
+//!
+//! Performance: Uses buffered reading (4KB chunks) for efficient data transfer.
 
 #![deny(unused_must_use)]
 
@@ -142,31 +144,16 @@ impl TelnetConnection {
     /// This reads from the stream and decodes TELNET commands.
     /// The decoder maintains state across calls, so commands spanning
     /// multiple reads are handled correctly.
+    ///
+    /// Performance note: This method now reads larger chunks (default 4KB)
+    /// instead of one byte at a time for better performance.
     pub async fn receive(&mut self) -> Result<TelnetEvent> {
         let stream = self.stream.as_mut().ok_or(TelnetError::Disconnected)?;
         
-        // Read a single byte to get events one at a time
-        let mut buffer = [0u8; 1];
+        // Read a larger chunk for better performance
+        let mut buffer = [0u8; 4096];
         let bytes_read = stream.read(&mut buffer).await?;
         
-        // Create human-readable representation
-        let readable = if buffer[0] >= 32 && buffer[0] <= 126 {
-            // Printable ASCII character
-            format!("'{}' (0x{:02x})", buffer[0] as char, buffer[0])
-        } else if buffer[0] == 10 {
-            "LF (\\n, 0x0a)".to_string()
-        } else if buffer[0] == 13 {
-            "CR (\\r, 0x0d)".to_string()
-        } else if buffer[0] == 0 {
-            "NUL (0x00)".to_string()
-        } else {
-            // Non-printable control character
-            format!("0x{:02x} (control)", buffer[0])
-        };
-        
-        debug!("Received {} byte(s): {} [raw: {:?}]", bytes_read, readable, buffer);
-        
-        // Check for EOF (server closed connection)
         if bytes_read == 0 {
             self.stream = None;
             self.state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
@@ -174,22 +161,31 @@ impl TelnetConnection {
             return Ok(TelnetEvent::Closed);
         }
         
-        // Decode the byte
-        if let Some(cmd) = self.decoder.decode_byte(buffer[0]) {
-            let event = match cmd {
-                TelnetCommand::Data(byte) => TelnetEvent::Data(vec![byte]),
-                TelnetCommand::Subnegotiation { option, data } => {
-                    TelnetEvent::Command(TelnetCommand::Subnegotiation { option, data })
+        debug!("Received {} bytes from stream", bytes_read);
+        
+        // Decode all bytes at once
+        let commands = self.decoder.decode(&buffer[..bytes_read]);
+        
+        // Process commands
+        for cmd in commands {
+            match cmd {
+                TelnetCommand::Data(byte) => {
+                    // Return first data byte as event
+                    return Ok(TelnetEvent::Data(vec![byte]));
                 }
-                _ => TelnetEvent::Command(cmd),
-            };
-            debug!("Decoded event: {:?}", event);
-            Ok(event)
-        } else {
-            // No complete command yet, return as data
-            debug!("Byte treated as data (not a complete TELNET command): {} [raw: {:?}]", readable, buffer);
-            Ok(TelnetEvent::Data(buffer.to_vec()))
+                TelnetCommand::Subnegotiation { option, data } => {
+                    return Ok(TelnetEvent::Command(TelnetCommand::Subnegotiation { option, data }));
+                }
+                _ => {
+                    // For other commands, return them as events
+                    return Ok(TelnetEvent::Command(cmd));
+                }
+            }
         }
+        
+        // No complete commands yet, return all bytes as data
+        debug!("No complete TELNET commands, returning {} bytes as data", bytes_read);
+        Ok(TelnetEvent::Data(buffer[..bytes_read].to_vec()))
     }
 
     /// Disconnect from the server.
