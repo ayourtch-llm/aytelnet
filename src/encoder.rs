@@ -3,6 +3,8 @@
 //! This module handles encoding of TELNET data and commands,
 //! including IAC byte escaping.
 
+#![deny(unused_must_use)]
+
 use crate::protocol::*;
 use crate::types::TelnetCommand;
 

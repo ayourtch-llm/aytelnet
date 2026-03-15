@@ -1,68 +1,83 @@
 //! CiscoConn - Simple command execution example
-//!
+
+#![deny(unused_must_use)]
+
 //! This example demonstrates how to use the CiscoConn struct to execute
 //! a single command on a Cisco device and get the output.
+//!
+//! Usage:
+//!   cargo run --example cisco_conn <target> <username> <password> <command>
+//!
+//! Examples:
+//!   cargo run --example cisco_conn 192.168.1.1 admin password "show version"
+//!   cargo run --example cisco_conn router.local cisco cisco123 "show running-config"
+//!   cargo run --example cisco_conn [::1]:2323 admin secret "show interfaces"
 
 use aytelnet::cisco_conn::{CiscoConn, ConnectionType};
-use std::time::Duration;
+use std::env;
+use tracing_subscriber;
+use tracing::{info, error};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Example 1: Basic usage with default timeouts
-    println!("=== Basic Usage ===");
+    // Initialize tracing subscriber with RUST_LOG support
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+        )
+        .init();
+
+    // Parse command line arguments
+    let args: Vec<String> = env::args().collect();
+    
+    if args.len() < 5 {
+        eprintln!("Usage: {} <target> <username> <password> <command>", args[0]);
+        eprintln!("");
+        eprintln!("Examples:");
+        eprintln!("  {} 192.168.1.1 admin password \"show version\"", args[0]);
+        eprintln!("  {} router.local cisco cisco123 \"show running-config\"", args[0]);
+        eprintln!("  {} [::1]:2323 admin secret \"show interfaces\"", args[0]);
+        std::process::exit(1);
+    }
+    
+    let target = &args[1];
+    let username = &args[2];
+    let password = &args[3];
+    let command = &args[4];
+    
+    info!("=== CiscoConn Command Execution ===");
+    info!("Target: {}", target);
+    info!("Username: {}", username);
+    info!("Command: {}", command);
+    println!("");
+    
+    // Create CiscoConn with default timeouts
     let conn = CiscoConn::new(
-        "192.168.1.1",
+        target,
         ConnectionType::CiscoTelnet,
-        "admin",
-        "password",
-        "show version",
+        username,
+        password,
+        command,
     )?;
-
-    println!("Target: {}", conn.target());
-    println!("Command: {}", conn.cmd());
-    println!("Username: {}", conn.username());
-
-    // Note: This would actually connect to the device and execute the command
-    // For demonstration, we're not executing it as there's no actual device
-    // let output = conn.execute().await?;
-    // println!("Output: {}", output);
-
-    // Example 2: With custom timeouts
-    println!("\n=== With Custom Timeouts ===");
-    let conn = CiscoConn::with_timeouts(
-        "router.local",
-        ConnectionType::CiscoTelnet,
-        "cisco",
-        "cisco123",
-        "show running-config",
-        Duration::from_secs(60),  // Connection timeout
-        Duration::from_secs(30),  // Read timeout
-    )?;
-
-    println!("Target: {}", conn.target());
-    println!("Command: {}", conn.cmd());
-
-    // Example 3: IPv6 address
-    println!("\n=== IPv6 Address ===");
-    let conn = CiscoConn::new(
-        "[::1]:2323",
-        ConnectionType::CiscoTelnet,
-        "admin",
-        "password",
-        "show interfaces",
-    )?;
-
-    println!("Target: {}", conn.target());
-    println!("Command: {}", conn.cmd());
-
-    // Example 4: Custom prompts
-    println!("\n=== Custom Prompts ===");
-    // Note: The CiscoConn struct doesn't expose custom prompts directly,
-    // but they can be configured internally if needed
-    println!("Custom prompts can be configured in CiscoConnConfig");
-
-    println!("\n=== Example Complete ===");
-    println!("To execute a real command, uncomment the conn.execute() call above");
-
+    
+    println!("Connecting and executing command...");
+    
+    // Execute the command
+    // Note: This will attempt to connect to the actual device
+    match conn.execute().await {
+        Ok(output) => {
+            println!("\n=== Command Output ===");
+            println!("{}", output);
+        }
+        Err(e) => {
+            error!("Error executing command: {}", e);
+            eprintln!("\nError executing command: {}", e);
+            std::process::exit(1);
+        }
+    }
+    
+    info!("=== Execution Complete ===");
+    
     Ok(())
 }

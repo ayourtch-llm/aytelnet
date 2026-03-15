@@ -1,5 +1,7 @@
 //! Shared types for TELNET client.
 
+#![deny(unused_must_use)]
+
 use std::fmt;
 
 use crate::error::TelnetError;

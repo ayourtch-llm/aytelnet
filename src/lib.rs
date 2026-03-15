@@ -2,7 +2,9 @@
 //!
 //! This library provides a fully async TELNET client implementation
 //! following RFC 854 and related TELNET specifications.
-//!
+
+#![deny(unused_must_use)]
+
 //! # Example
 //!
 //! ```no_run

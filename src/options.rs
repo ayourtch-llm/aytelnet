@@ -3,6 +3,8 @@
 //! This module handles TELNET option negotiation according to RFC 855.
 //! It manages the state machine for WILL/WONT/DO/DONT exchanges.
 
+#![deny(unused_must_use)]
+
 use crate::types::{OptionState, TelnetCommand};
 
 /// TELNET option negotiator.

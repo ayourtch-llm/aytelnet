@@ -1,5 +1,7 @@
 //! TELNET error types.
 
+#![deny(unused_must_use)]
+
 use thiserror::Error;
 
 /// Main error type for TELNET operations.

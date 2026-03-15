@@ -3,6 +3,8 @@
 //! This module verifies that the decoder correctly handles TELNET commands
 //! that span multiple input chunks, ensuring proper state machine behavior.
 
+#![deny(unused_must_use)]
+
 #[cfg(test)]
 mod tests {
     use crate::decoder::TelnetDecoder;

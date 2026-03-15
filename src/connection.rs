@@ -2,6 +2,8 @@
 //!
 //! This module provides a simple TELNET connection with explicit state machine handling.
 
+#![deny(unused_must_use)]
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -12,6 +14,8 @@ use crate::error::Result;
 use crate::options::OptionNegotiator;
 use crate::state::StateManager;
 use crate::types::{TelnetCommand, TelnetEvent};
+use tracing::debug;
+use tracing::info;
 
 /// TELNET connection with explicit state machine handling.
 ///
@@ -48,10 +52,15 @@ impl TelnetConnection {
 
     /// Connect to a TELNET server.
     pub async fn connect(host: &str, port: u16) -> Result<Self> {
+        info!("TcpStream::connect({}:{}) starting...", host, port);
         let stream = TcpStream::connect((host, port)).await?;
+        debug!("TcpStream::connect({}:{}) completed", host, port);
+        
         let mut conn = Self::new();
         conn.stream = Some(stream);
         conn.state_manager.set_connection_state(crate::types::ConnectionState::Connected);
+        
+        info!("TelnetConnection::connect({}:{}) completed successfully", host, port);
         
         Ok(conn)
     }
@@ -83,19 +92,24 @@ impl TelnetConnection {
     /// Negotiate an option.
     pub async fn negotiate_option(&mut self, option: u8, enable: bool) -> Result<()> {
         if enable {
+            debug!("Requesting to enable option: {}", option);
             // Request to enable option
             let cmd = self.option_negotiator.request_enable(option);
             if cmd != TelnetCommand::Nop {
+                debug!("Sending command to enable option {}: {:?}", option, cmd);
                 self.send_command(&cmd).await?;
             }
         } else {
+            debug!("Requesting to disable option: {}", option);
             // Request to disable option
             let cmd = self.option_negotiator.request_disable(option);
             if cmd != TelnetCommand::Nop {
+                debug!("Sending command to disable option {}: {:?}", option, cmd);
                 self.send_command(&cmd).await?;
             }
         }
         
+        info!("Option negotiation completed: {} enabled={}", option, enable);
         Ok(())
     }
 
@@ -103,8 +117,10 @@ impl TelnetConnection {
     pub async fn send_command(&mut self, command: &TelnetCommand) -> Result<()> {
         let encoded = TelnetEncoder::encode_command(command);
         if let Some(stream) = &mut self.stream {
+            debug!("Sending TELNET command ({} bytes): {:?}", encoded.len(), command);
             stream.write_all(&encoded).await?;
             stream.flush().await?;
+            debug!("TELNET command sent successfully");
         }
         Ok(())
     }
@@ -113,8 +129,10 @@ impl TelnetConnection {
     pub async fn send(&mut self, data: &[u8]) -> Result<()> {
         let encoded = TelnetEncoder::encode_data(data);
         if let Some(stream) = &mut self.stream {
+            debug!("Sending data ({} bytes)", data.len());
             stream.write_all(&encoded).await?;
             stream.flush().await?;
+            debug!("Data sent successfully");
         }
         Ok(())
     }
@@ -131,24 +149,30 @@ impl TelnetConnection {
         let mut buffer = [0u8; 1];
         let bytes_read = stream.read(&mut buffer).await?;
         
+        debug!("Received {} byte(s) from stream: {:?}", bytes_read, buffer);
+        
         // Check for EOF (server closed connection)
         if bytes_read == 0 {
             self.stream = None;
             self.state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
+            info!("Connection closed by server");
             return Ok(TelnetEvent::Closed);
         }
         
         // Decode the byte
         if let Some(cmd) = self.decoder.decode_byte(buffer[0]) {
-            Ok(match cmd {
+            let event = match cmd {
                 TelnetCommand::Data(byte) => TelnetEvent::Data(vec![byte]),
                 TelnetCommand::Subnegotiation { option, data } => {
                     TelnetEvent::Command(TelnetCommand::Subnegotiation { option, data })
                 }
                 _ => TelnetEvent::Command(cmd),
-            })
+            };
+            debug!("Decoded event: {:?}", event);
+            Ok(event)
         } else {
             // No complete command yet, return as data
+            debug!("Byte treated as data (not a complete TELNET command): {:?}", buffer[0]);
             Ok(TelnetEvent::Data(buffer.to_vec()))
         }
     }

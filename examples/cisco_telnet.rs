@@ -1,5 +1,7 @@
 //! CiscoTelnet Interactive CLI Example
-//!
+
+#![deny(unused_must_use)]
+
 //! A CLI example for connecting to Cisco devices with automated login.
 //!
 //! Usage:

@@ -3,10 +3,13 @@
 //! This module provides a simple interface for executing single commands
 //! on Cisco devices via TELNET.
 
+#![deny(unused_must_use)]
+
 use std::time::Duration;
 
 use crate::cisco_telnet::CiscoTelnet;
 use crate::error::TelnetError;
+use tracing::{debug, info, warn, error};
 
 /// Connection type for Cisco devices
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -169,9 +172,13 @@ impl CiscoConn {
     /// * `Ok(String)` - Command output
     /// * `Err(TelnetError)` - Connection or execution error
     pub async fn execute(&self) -> Result<String, TelnetError> {
+        debug!("Starting CiscoConn::execute for target: {}", self.config.target);
+        debug!("Command: {}", self.config.cmd);
+
         // Determine connection type and create appropriate client
         let mut client = match self.config.conntype {
             ConnectionType::CiscoTelnet => {
+                debug!("Creating CiscoTelnet client with timeout: {:?}, read_timeout: {:?}", self.config.timeout, self.config.read_timeout);
                 let client = CiscoTelnet::new(&self.config.target, &self.config.username, &self.config.password);
                 client.with_timeout(self.config.timeout).with_read_timeout(self.config.read_timeout)
             }
@@ -179,21 +186,33 @@ impl CiscoConn {
 
         // Add custom prompts if provided
         for prompt in &self.config.prompts {
+            debug!("Adding prompt: {}", prompt);
             client = client.with_prompt(prompt);
         }
 
+        info!("Connecting to device...");
         // Connect and authenticate
         client.connect().await?;
+        info!("Connected successfully");
 
-        // Send the command
-        client.send(self.config.cmd.as_bytes()).await?;
+        // Send the command with newline
+        let command_with_newline = format!("{}\n", self.config.cmd);
+        debug!("Sending command: {}", command_with_newline);
+        client.send(command_with_newline.as_bytes()).await?;
+        debug!("Command sent successfully");
 
         // Wait for command output until prompt is detected
-        let output = client.receive_until(b"\n", self.config.read_timeout).await?;
+        // Instead of waiting for newline, wait for privilege prompt (#)
+        info!("Waiting for command output until prompt detected (timeout: {:?})", self.config.read_timeout);
+        let output = client.receive_until(b"#", self.config.read_timeout).await?;
+        debug!("Received output ({} bytes)", output.len());
 
         // Disconnect
+        info!("Disconnecting from device...");
         client.disconnect().await?;
+        info!("Disconnected successfully");
 
+        debug!("Command execution completed successfully");
         Ok(output)
     }
 

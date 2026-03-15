@@ -1,5 +1,7 @@
 //! TELNET Client Example
-//!
+
+#![deny(unused_must_use)]
+
 //! A TELNET client with escape mode (Ctrl-]) for commands.
 //!
 //! Usage:

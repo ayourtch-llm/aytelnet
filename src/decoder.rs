@@ -3,6 +3,8 @@
 //! This module handles decoding of TELNET data streams,
 //! parsing commands and extracting application data.
 
+#![deny(unused_must_use)]
+
 use crate::protocol::*;
 use crate::types::TelnetCommand;
 

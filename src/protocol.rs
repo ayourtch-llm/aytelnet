@@ -3,6 +3,8 @@
 //! This module defines all the constants and basic types needed for
 //! TELNET protocol implementation according to RFC 854 and related RFCs.
 
+#![deny(unused_must_use)]
+
 /// IAC (Interpret As Command) byte - 255 (0xFF)
 ///
 /// When the IAC byte is received, the next byte is interpreted as a

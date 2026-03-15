@@ -3,6 +3,8 @@
 //! This module handles the overall client state including connection
 //! status and option states.
 
+#![deny(unused_must_use)]
+
 use crate::types::{ClientState, ConnectionState, OptionState, TelnetCommand};
 
 /// TELNET client state manager.

@@ -2,7 +2,9 @@
 //!
 //! This module provides a high-level TELNET client specifically designed for
 //! connecting to Cisco devices with automated username/password authentication.
-//!
+
+#![deny(unused_must_use)]
+
 //! # Example
 //!
 //! ```no_run
@@ -30,6 +32,7 @@ use std::time::Duration;
 use crate::connection::TelnetConnection;
 use crate::error::{Result, TelnetError};
 use crate::types::TelnetEvent;
+use tracing::{debug, info, warn, error};
 
 /// CiscoTelnet - A TELNET client for Cisco devices with automated login.
 ///
@@ -226,23 +229,41 @@ impl CiscoTelnet {
     /// }
     /// ```
     pub async fn connect(&mut self) -> Result<()> {
+        debug!("CiscoTelnet::connect() starting for address: {}", self.address);
+        
         // Reset state
         self.state = CiscoTelnetState::Connecting;
         self.buffer.clear();
         
         // Parse address to get host and port
         let (host, port) = self.parse_address()?;
+        debug!("Parsed address: {}:{} (port {})", self.address, host, port);
         
         // Connect to the server
+        debug!("Connecting to {}:{}...", host, port);
         let telnet = TelnetConnection::connect(&host, port).await?;
+        debug!("TcpStream connected successfully");
         self.telnet = Some(telnet);
         self.state = CiscoTelnetState::Connected;
+        debug!("Connection established");
         
         // Negotiate options
+        debug!("Negotiating TELNET options...");
         self.negotiate_options().await?;
+        debug!("Options negotiated successfully");
         
         // Wait for login prompts and authenticate
+        debug!("Starting authentication process...");
         self.authenticate().await?;
+        debug!("Authentication successful");
+        
+        info!("Connected and authenticated to {}", self.address);
+        
+        // Log initial buffer contents for debugging
+        if !self.buffer.is_empty() {
+            let buffer_preview = String::from_utf8_lossy(&self.buffer[..self.buffer.len().min(200)]);
+            debug!("Initial buffer after auth: {}", buffer_preview);
+        }
         
         Ok(())
     }
@@ -289,31 +310,51 @@ impl CiscoTelnet {
     async fn negotiate_options(&mut self) -> Result<()> {
         let telnet = self.telnet.as_mut().ok_or(TelnetError::Disconnected)?;
         
-        // Enable common options for better compatibility
+        debug!("Enabling TELNET options for compatibility...");
+        debug!("  - Disabling ECHO");
         telnet.negotiate_option(crate::protocol::OPT_ECHO, false).await?;
+        
+        debug!("  - Enabling BINARY mode");
         telnet.negotiate_option(crate::protocol::OPT_BINARY, true).await?;
+        
+        debug!("  - Enabling SUPPRESS_GA");
         telnet.negotiate_option(crate::protocol::OPT_SUPPRESS_GA, true).await?;
         
+        debug!("TELNET options negotiation completed");
         Ok(())
     }
 
     /// Authenticate with the Cisco device.
     async fn authenticate(&mut self) -> Result<()> {
+        info!("authenticate() starting for user: {}", self.username);
+        debug!("Current buffer size: {} bytes", self.buffer.len());
+        if !self.buffer.is_empty() {
+            let preview = String::from_utf8_lossy(&self.buffer[..self.buffer.len().min(200)]);
+            debug!("Buffer before auth: {}", preview);
+        }
+        
         // Wait for login prompt
+        info!("Calling wait_for_login_prompt...");
         self.wait_for_login_prompt().await?;
+        info!("wait_for_login_prompt returned");
         
         // Send username
+        info!("Calling send_username...");
         self.send_username().await?;
+        info!("send_username returned");
         
         // Wait for password prompt
+        info!("Calling wait_for_password_prompt...");
         self.wait_for_password_prompt().await?;
+        info!("wait_for_password_prompt returned");
         
-        // Send password
-        self.send_password().await?;
+        // Send password and wait for login completion
+        // This combines the password sending and login completion detection
+        info!("Calling send_password_and_wait...");
+        self.send_password_and_wait().await?;
+        info!("send_password_and_wait returned");
         
-        // Wait for login to complete
-        self.wait_for_login_complete().await?;
-        
+        info!("Authentication completed successfully");
         Ok(())
     }
 
@@ -327,14 +368,29 @@ impl CiscoTelnet {
             b"name:".as_slice(),
         ];
         
+        debug!("wait_for_login_prompt() starting, checking for patterns: {:?}", prompts);
+        debug!("Current buffer size: {} bytes", self.buffer.len());
+        if !self.buffer.is_empty() {
+            let preview = String::from_utf8_lossy(&self.buffer[..self.buffer.len().min(100)]);
+            debug!("Buffer preview: {}", preview);
+        }
+        
         for prompt in &prompts {
+            debug!("  Checking for pattern: {:?}", String::from_utf8_lossy(prompt));
             if self.wait_for_bytes(prompt, self.read_timeout).await.is_ok() {
+                debug!("Found login prompt: {:?}", String::from_utf8_lossy(prompt));
                 self.state = CiscoTelnetState::SendingUsername;
                 return Ok(());
             }
         }
         
         // If none matched, we might already be logged in or need to try different prompts
+        warn!("No standard login prompt detected, may already be authenticated or device uses custom prompts");
+        warn!("Final buffer size: {} bytes", self.buffer.len());
+        if !self.buffer.is_empty() {
+            let preview = String::from_utf8_lossy(&self.buffer[..self.buffer.len().min(200)]);
+            debug!("Final buffer preview: {}", preview);
+        }
         Ok(())
     }
 
@@ -343,10 +399,13 @@ impl CiscoTelnet {
         let mut send_data = self.username.as_bytes().to_vec();
         send_data.push(b'\n');
         
+        debug!("Sending username: {}", self.username);
         let telnet = self.telnet.as_mut().ok_or(TelnetError::Disconnected)?;
         telnet.send(&send_data).await?;
+        debug!("Username sent successfully");
         
         // Wait for response (consume any response)
+        debug!("Waiting for password prompt...");
         self.wait_for_bytes(b"Password:".as_slice(), self.read_timeout).await?;
         
         self.state = CiscoTelnetState::SendingPassword;
@@ -357,8 +416,11 @@ impl CiscoTelnet {
     async fn wait_for_password_prompt(&mut self) -> Result<()> {
         let start = std::time::Instant::now();
         
+        debug!("Waiting for password prompt (timeout: {:?})", self.read_timeout);
+        
         loop {
             if start.elapsed() > self.read_timeout {
+                debug!("Timeout waiting for password prompt after {:?}", start.elapsed());
                 return Err(TelnetError::Timeout);
             }
             
@@ -369,6 +431,7 @@ impl CiscoTelnet {
                     // Check for password prompt
                     let buffer_str = String::from_utf8_lossy(&self.buffer);
                     if buffer_str.contains("Password:") {
+                        debug!("Found password prompt");
                         self.state = CiscoTelnetState::SendingPassword;
                         return Ok(());
                     }
@@ -377,17 +440,23 @@ impl CiscoTelnet {
                     if buffer_str.contains("Authentication failed") ||
                        buffer_str.contains("Access denied") ||
                        buffer_str.contains("Authentication fail") {
+                        debug!("Authentication error detected in buffer");
                         self.state = CiscoTelnetState::LoginFailed;
                         return Err(TelnetError::Protocol("Authentication failed".to_string()));
                     }
                 }
                 Ok(TelnetEvent::Closed) => {
+                    debug!("Connection closed while waiting for password prompt");
                     self.state = CiscoTelnetState::Error("Connection closed".to_string());
                     return Err(TelnetError::Disconnected);
                 }
                 Ok(TelnetEvent::Error(e)) => {
+                    debug!("Error receiving data: {}", e);
                     self.state = CiscoTelnetState::Error(e.to_string());
                     return Err(e);
+                }
+                Ok(TelnetEvent::Command(cmd)) => {
+                    debug!("Received TELNET command: {:?}", cmd);
                 }
                 _ => {}
             }
@@ -396,22 +465,34 @@ impl CiscoTelnet {
         }
     }
 
-    /// Send password to the device.
-    async fn send_password(&mut self) -> Result<()> {
+    /// Send password to the device and wait for login completion.
+    async fn send_password_and_wait(&mut self) -> Result<()> {
         let mut send_data = self.password.as_bytes().to_vec();
         send_data.push(b'\n');
         
+        info!("send_password_and_wait() starting for user: {}", self.username);
+        debug!("Sending password bytes: {:?}", self.password);
+        debug!("Full send_data: {:?}", send_data);
+        
+        debug!("Sending password (length: {})", self.password.len());
         let telnet = self.telnet.as_mut().ok_or(TelnetError::Disconnected)?;
         telnet.send(&send_data).await?;
+        info!("Password sent successfully");
         
         // Wait for response (consume any response)
-        self.wait_for_bytes(b"Router#".as_slice(), self.read_timeout).await?;
+        // Look for any prompt ending with # (privilege mode)
+        info!("Waiting for login completion prompt (timeout: {:?})", self.read_timeout);
+        debug!("Buffer size before wait: {} bytes", self.buffer.len());
+        self.wait_for_bytes(b"#", self.read_timeout).await?;
         
+        info!("Login prompt detected (privilege mode), authentication complete");
+        self.state = CiscoTelnetState::LoggedIn;
         Ok(())
     }
 
     /// Send data and wait for a specific prompt.
     async fn send_with_prompt(&mut self, data: &str, prompt: &[u8]) -> Result<()> {
+        debug!("Sending data with prompt: {:?}", String::from_utf8_lossy(prompt));
         // Send data with newline
         let mut send_data = data.as_bytes().to_vec();
         send_data.push(b'\n');
@@ -420,8 +501,10 @@ impl CiscoTelnet {
         telnet.send(&send_data).await?;
         
         // Wait for the prompt (consume any response)
+        debug!("Waiting for prompt: {:?}", String::from_utf8_lossy(prompt));
         self.wait_for_bytes(prompt, self.read_timeout).await?;
         
+        debug!("Prompt detected successfully");
         Ok(())
     }
 
@@ -429,9 +512,19 @@ impl CiscoTelnet {
     async fn wait_for_bytes(&mut self, bytes: &[u8], timeout: Duration) -> Result<()> {
         let start = std::time::Instant::now();
         
+        debug!("wait_for_bytes() called: searching for {:?} with timeout {:?}", 
+               String::from_utf8_lossy(bytes), timeout);
+        debug!("Buffer size at start: {} bytes", self.buffer.len());
+        
         loop {
             // Check if we've timed out
             if start.elapsed() > timeout {
+                warn!("Timeout in wait_for_bytes after {:?}", start.elapsed());
+                warn!("Final buffer size: {} bytes", self.buffer.len());
+                if !self.buffer.is_empty() {
+                    let preview = String::from_utf8_lossy(&self.buffer[..self.buffer.len().min(200)]);
+                    warn!("Final buffer preview: {}", preview);
+                }
                 return Err(TelnetError::Timeout);
             }
             
@@ -445,9 +538,11 @@ impl CiscoTelnet {
             }).await {
                 Ok(Ok(TelnetEvent::Data(data))) => {
                     self.buffer.extend_from_slice(&data);
+                    debug!("Received {} bytes of data, total buffer: {} bytes", data.len(), self.buffer.len());
                     
                     // Check if we found the prompt
                     if bytes.is_empty() || Self::buffer_contains(&self.buffer, bytes) {
+                        debug!("Found expected bytes in buffer");
                         return Ok(());
                     }
                     
@@ -456,30 +551,33 @@ impl CiscoTelnet {
                     if buffer_str.contains("Authentication failed") ||
                        buffer_str.contains("Access denied") ||
                        buffer_str.contains("Authentication fail") {
+                        debug!("Authentication error detected");
                         return Err(TelnetError::Protocol("Authentication failed".to_string()));
                     }
                 }
                 Ok(Ok(TelnetEvent::Command(cmd))) => {
-                    // Handle TELNET commands
-                    eprintln!("Received command: {:?}", cmd);
+                    debug!("Received TELNET command: {:?}", cmd);
                 }
-                Ok(Ok(TelnetEvent::OptionNegotiated { .. })) => {
-                    // Option negotiated, continue waiting
+                Ok(Ok(TelnetEvent::OptionNegotiated { option, enabled })) => {
+                    debug!("Option negotiated: {} enabled={}", option, enabled);
                 }
                 Ok(Ok(TelnetEvent::Closed)) => {
+                    warn!("Connection closed while waiting for bytes");
                     self.state = CiscoTelnetState::Error("Connection closed".to_string());
                     return Err(TelnetError::Disconnected);
                 }
                 Ok(Ok(TelnetEvent::Error(e))) => {
+                    warn!("Error receiving data: {}", e);
                     self.state = CiscoTelnetState::Error(e.to_string());
                     return Err(e);
                 }
                 Ok(Err(e)) => {
+                    warn!("Error in receive: {}", e);
                     self.state = CiscoTelnetState::Error(e.to_string());
                     return Err(e);
                 }
                 Err(_) => {
-                    // Timeout waiting for data
+                    debug!("Timeout waiting for data from stream");
                     continue;
                 }
             }
@@ -490,6 +588,9 @@ impl CiscoTelnet {
     }
 
     /// Wait for login to complete.
+    /// 
+    /// Note: This function is now deprecated. Use send_password_and_wait() instead.
+    #[deprecated(since = "0.1.0", note = "Use send_password_and_wait() instead")]
     async fn wait_for_login_complete(&mut self) -> Result<()> {
         // Common prompt patterns for Cisco devices
         let common_prompts: Vec<Vec<u8>> = vec![
@@ -517,20 +618,25 @@ impl CiscoTelnet {
             }
         }
         
+        info!("wait_for_login_complete() starting with {} prompt patterns", all_prompts.len());
+        
         let start = std::time::Instant::now();
         
         loop {
             if start.elapsed() > self.timeout {
+                warn!("Timeout waiting for login completion after {:?}", start.elapsed());
                 return Err(TelnetError::Timeout);
             }
             
             match self.telnet.as_mut().ok_or(TelnetError::Disconnected)?.receive().await {
                 Ok(TelnetEvent::Data(data)) => {
                     self.buffer.extend_from_slice(&data);
+                    debug!("Received {} bytes of data, total buffer: {} bytes", data.len(), self.buffer.len());
                     
                     // Check if we've received a prompt
                     for prompt in &all_prompts {
                         if Self::buffer_ends_with(&self.buffer, prompt) {
+                            info!("Login prompt detected: {:?}", String::from_utf8_lossy(prompt));
                             self.state = CiscoTelnetState::LoggedIn;
                             return Ok(());
                         }
@@ -541,17 +647,26 @@ impl CiscoTelnet {
                     if buffer_str.contains("Authentication failed") ||
                        buffer_str.contains("Access denied") ||
                        buffer_str.contains("Authentication fail") {
+                        warn!("Authentication error detected");
                         self.state = CiscoTelnetState::LoginFailed;
                         return Err(TelnetError::Protocol("Authentication failed".to_string()));
                     }
                 }
                 Ok(TelnetEvent::Closed) => {
+                    warn!("Connection closed while waiting for login completion");
                     self.state = CiscoTelnetState::Error("Connection closed".to_string());
                     return Err(TelnetError::Disconnected);
                 }
                 Ok(TelnetEvent::Error(e)) => {
+                    warn!("Error while waiting for login completion: {}", e);
                     self.state = CiscoTelnetState::Error(e.to_string());
                     return Err(e);
+                }
+                Ok(TelnetEvent::Command(cmd)) => {
+                    debug!("Received TELNET command while waiting for login: {:?}", cmd);
+                }
+                Ok(TelnetEvent::OptionNegotiated { option, enabled }) => {
+                    debug!("Option negotiated while waiting for login: {} enabled={}", option, enabled);
                 }
                 _ => {}
             }
@@ -609,13 +724,17 @@ impl CiscoTelnet {
     /// ```
     pub async fn send(&mut self, data: &[u8]) -> Result<()> {
         if self.state != CiscoTelnetState::LoggedIn {
+            debug!("Cannot send: not logged in, state: {:?}", self.state);
             return Err(TelnetError::InvalidState(
                 "Not logged in".to_string(),
             ));
         }
         
+        debug!("Sending {} bytes", data.len());
         let telnet = self.telnet.as_mut().ok_or(TelnetError::Disconnected)?;
-        telnet.send(data).await
+        telnet.send(data).await?;
+        debug!("Send completed successfully");
+        Ok(())
     }
 
     /// Receive data until a specific pattern is found.
@@ -648,8 +767,11 @@ impl CiscoTelnet {
         let start = std::time::Instant::now();
         let mut output = String::new();
         
+        debug!("Receiving until pattern: {:?}", String::from_utf8_lossy(pattern));
+        
         loop {
             if start.elapsed() > timeout {
+                debug!("Timeout receiving until pattern after {:?}", start.elapsed());
                 return Err(TelnetError::Timeout);
             }
             
@@ -659,16 +781,24 @@ impl CiscoTelnet {
                     let text = String::from_utf8_lossy(&data);
                     output.push_str(&text);
                     
+                    debug!("Received {} bytes, total output: {} bytes", data.len(), output.len());
+                    
                     // Check if we've found the pattern
                     if output.contains(&String::from_utf8_lossy(pattern).as_ref()) {
+                        debug!("Pattern found in output");
                         break;
                     }
                 }
                 Ok(TelnetEvent::Closed) => {
+                    debug!("Connection closed while receiving");
                     return Err(TelnetError::Disconnected);
                 }
                 Ok(TelnetEvent::Error(e)) => {
+                    debug!("Error while receiving: {}", e);
                     return Err(e);
+                }
+                Ok(TelnetEvent::Command(cmd)) => {
+                    debug!("Received TELNET command while receiving data: {:?}", cmd);
                 }
                 _ => {}
             }
@@ -676,6 +806,7 @@ impl CiscoTelnet {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
         
+        debug!("receive_until completed successfully, output length: {} bytes", output.len());
         Ok(output)
     }
 
