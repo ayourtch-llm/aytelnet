@@ -34,6 +34,7 @@ pub struct TelnetConnection {
     option_negotiator: OptionNegotiator,
     
     /// Data encoder
+    #[allow(dead_code)]
     encoder: TelnetEncoder,
     
     /// Data decoder (preserves state across reads)

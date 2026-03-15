@@ -11,7 +11,7 @@ use tracing::debug;
 
 /// States for the TELNET decoder state machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DecodeState {
+pub(crate) enum DecodeState {
     /// Normal data receiving state
     Normal,
     
@@ -163,10 +163,6 @@ impl TelnetDecoder {
                         debug!("  -> DM (Data Mark) command");
                         Some(TelnetCommand::DataMark)
                     }
-                    EOR => {
-                        debug!("  -> EOR (End of Record) command");
-                        Some(TelnetCommand::EndOfRecord)
-                    }
                     EOF => {
                         debug!("  -> EOF (End of File) command");
                         Some(TelnetCommand::EndOfFile)
@@ -295,7 +291,8 @@ impl TelnetDecoder {
     }
 
     /// Get the current decoder state.
-    pub fn state(&self) -> DecodeState {
+    #[allow(dead_code)]
+    pub(crate) fn state(&self) -> DecodeState {
         self.state
     }
 }

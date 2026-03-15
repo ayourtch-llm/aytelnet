@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use crate::cisco_telnet::CiscoTelnet;
 use crate::error::TelnetError;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, info};
 
 /// Connection type for Cisco devices
 #[derive(Debug, Clone, PartialEq, Eq)]

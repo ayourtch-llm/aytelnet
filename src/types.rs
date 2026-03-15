@@ -4,8 +4,6 @@
 
 use std::fmt;
 
-use crate::error::TelnetError;
-
 /// TELNET command types.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TelnetCommand {

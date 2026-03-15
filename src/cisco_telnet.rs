@@ -32,7 +32,7 @@ use std::time::Duration;
 use crate::connection::TelnetConnection;
 use crate::error::{Result, TelnetError};
 use crate::types::TelnetEvent;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, info, warn};
 
 /// Check if output contains any of the configured prompt patterns
 fn output_contains_prompt(output: &str) -> bool {
@@ -549,6 +549,7 @@ impl CiscoTelnet {
     }
 
     /// Send data and wait for a specific prompt.
+    #[allow(dead_code)]
     async fn send_with_prompt(&mut self, data: &str, prompt: &[u8]) -> Result<()> {
         debug!("Sending data with prompt: {:?}", String::from_utf8_lossy(prompt));
         // Send data with newline
@@ -652,6 +653,7 @@ impl CiscoTelnet {
     /// 
     /// Note: This function is now deprecated. Use send_password_and_wait() instead.
     #[deprecated(since = "0.1.0", note = "Use send_password_and_wait() instead")]
+    #[allow(dead_code)]
     async fn wait_for_login_complete(&mut self) -> Result<()> {
         // Common prompt patterns for Cisco devices
         let common_prompts: Vec<Vec<u8>> = vec![
