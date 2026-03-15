@@ -184,14 +184,16 @@ impl TelnetConnection {
             }
         }
         
-        // Return the first command event if we have any
-        if let Some(first_cmd) = command_events.into_iter().next() {
+        // Always return data first if we have any - this is critical for
+        // protocol handling where data and commands are interleaved
+        if !data_bytes.is_empty() {
+            debug!("Returning {} bytes as Data event (priority over {} commands)", 
+                   data_bytes.len(), command_events.len());
+            Ok(TelnetEvent::Data(data_bytes))
+        } else if let Some(first_cmd) = command_events.into_iter().next() {
+            // No data, return first TELNET command event
             debug!("Returning first TELNET command event");
             Ok(first_cmd)
-        } else if !data_bytes.is_empty() {
-            // No TELNET commands, return all data
-            debug!("Returning {} bytes as Data event", data_bytes.len());
-            Ok(TelnetEvent::Data(data_bytes))
         } else {
             // No data, no commands - shouldn't happen but handle it
             debug!("No complete commands or data, returning empty");
