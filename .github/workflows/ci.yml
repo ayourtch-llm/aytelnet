@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+    
+    - name: Run Tests
+      run: cargo test --lib
+    
+    - name: Check Coverage
+      run: |
+        cargo install cargo-tarpaulin
+        cargo tarpaulin --lib --out Html --output-dir coverage
+        cp -r coverage ${{ github.workspace }}/coverage
+        
+    - name: Upload Coverage
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: coverage/
+        
+    - name: Verify Minimum Coverage
+      run: |
+        COVERAGE=$(cargo tarpaulin --lib --out Xml | grep 'line-rate' | sed 's/.*line-rate="\([^"]*\)".*/\1/')
+        echo "Coverage: $COVERAGE"
+        if (( $(echo "$COVERAGE < 0.80" | bc -l) )); then
+          echo "❌ Coverage below 80% threshold"
+          exit 1
+        fi
+        echo "✅ Coverage meets 80% threshold"
