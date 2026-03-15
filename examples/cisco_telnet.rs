@@ -1,21 +1,22 @@
-//! TELNET Client Example
+//! Cisco Telnet Client Example
 //!
-//! A TELNET client with escape mode (Ctrl-]) for commands.
+//! A CLI example for connecting to Cisco devices with automated login.
 //!
 //! Usage:
-//!   cargo run --example telnet_client <host> [port]
+//!   cargo run --example cisco_telnet <address> <username> <password>
 //!
 //! Examples:
-//!   cargo run --example telnet_client example.com 23
-//!   cargo run --example telnet_client 192.168.1.1
-//!   cargo run --example telnet_client [::1] 23
+//!   cargo run --example cisco_telnet 192.168.1.1 admin secret
+//!   cargo run --example cisco_telnet [::1] admin secret
+//!   cargo run --example cisco_telnet router.local admin secret
 //!
 //! Features:
-//!   - Immediate character echo (sends characters as typed)
+//!   - Automatic username/password authentication
+//!   - Interactive shell after login
 //!   - Escape mode with Ctrl-]
-//!   - Commands: quit, help, status
+//!   - Custom prompt detection
 
-use aytelnet::{TelnetConnection, TelnetEvent, OPT_BINARY, OPT_ECHO};
+use aytelnet::cisco_telnet::CiscoTelnet;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEventKind},
@@ -26,58 +27,56 @@ use crossterm::{
 use std::env;
 use std::error::Error;
 use std::io::{self, Write};
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // Parse command line arguments
     let args: Vec<String> = env::args().collect();
     
-    if args.len() < 2 {
-        eprintln!("Usage: {} <host> [port]", args[0]);
-        eprintln!("Example: {} example.com 23", args[0]);
+    if args.len() < 4 {
+        eprintln!("Usage: {} <address> <username> <password>", args[0]);
+        eprintln!("Example: {} 192.168.1.1 admin secret", args[0]);
+        eprintln!("         {} router.local admin secret", args[0]);
+        eprintln!("         {} [::1] admin secret", args[0]);
         std::process::exit(1);
     }
     
-    let host = &args[1];
-    let port: u16 = args.get(2)
-        .map(|s| s.parse().unwrap_or(23))
-        .unwrap_or(23);
+    let address = &args[1];
+    let username = &args[2];
+    let password = &args[3];
     
-    println!("Connecting to {}:{}...", host, port);
+    println!("Connecting to {} as {}...", address, username);
     
-    // Connect to the TELNET server
-    let mut client = TelnetConnection::connect(host, port).await?;
-    println!("Connected!");
+    // Create CiscoTelnet client
+    let mut client = CiscoTelnet::new(address, username, password)
+        .with_timeout(Duration::from_secs(30))
+        .with_read_timeout(Duration::from_secs(10))
+        .with_prompts(&["Router*", "Switch*", "ASA*", "Firepower*", "config"]);
     
-    // Negotiate common options
-    println!("Negotiating options...");
+    // Connect and authenticate
+    client.connect().await?;
+    println!("Connected and authenticated!");
     
-    // Request to suppress GA (Go Ahead)
-    client.negotiate_option(aytelnet::OPT_SUPPRESS_GA, true).await?;
-    
-    // Request binary mode (disable character interpretation)
-    client.negotiate_option(OPT_BINARY, true).await?;
-    
-    // Request NO ECHO - let client handle local echo
-    client.negotiate_option(OPT_ECHO, false).await?;
-    
-    // println!("Options negotiated!");
-    
-    // Main event loop
-    println!("\n--- TELNET Session ---");
+    // Enter interactive mode
+    println!("\n--- Cisco Device Shell ---");
     println!("Type Ctrl-] to enter escape mode");
     println!("Commands in escape mode: help, quit, status, escape");
-    println!("========================\n");
+    println!("============================\n");
     
     // Escape mode state machine
     let mut escape_mode = false;
     let mut escape_buffer = String::new();
     let mut escape_data_buffer = Vec::new();
     
+    // Set up terminal for raw mode
+    terminal::enable_raw_mode()?;
+    execute!(io::stdout(), EnterAlternateScreen)?;
+    
     loop {
         // Use select to handle both keyboard input and server events
         tokio::select! {
-            // Handle incoming TELNET events
+            // Handle incoming data
             event = client.receive() => {
                 match event {
                     Ok(TelnetEvent::Data(data)) => {
@@ -113,7 +112,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             io::stdout().flush().unwrap();
                         }
                     }
-                    Ok(TelnetEvent::Closed) => {
+                   Ok(TelnetEvent::Closed) => {
                         if !escape_mode {
                             println!("\n[Connection closed]");
                         }
@@ -206,7 +205,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     }
                                 }
                                 KeyCode::Backspace | KeyCode::Delete => {
-                                    // Show backspace effect locally - move cursor back
+                                    // Show backspace effect locally
                                     let _ = execute!(io::stdout(), cursor::MoveLeft(1));
                                     let _ = execute!(io::stdout(), Print(" "));
                                     let _ = execute!(io::stdout(), cursor::MoveLeft(1));
@@ -235,9 +234,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     
+    // Clean up terminal
+    execute!(io::stdout(), LeaveAlternateScreen)?;
+    terminal::disable_raw_mode()?;
+    
     // Disconnect
     client.disconnect().await?;
-    println!("Disconnected from server.");
+    println!("Disconnected from device.");
     
     Ok(())
 }
@@ -247,7 +250,7 @@ async fn handle_escape_command(
     cmd: &str,
     stdout: &mut io::Stdout,
     escape_buffer: &mut String,
-    client: &mut TelnetConnection,
+    client: &mut CiscoTelnet,
 ) -> Result<(), Box<dyn Error>> {
     let cmd_lower = cmd.to_lowercase();
     
@@ -255,24 +258,25 @@ async fn handle_escape_command(
         "quit" | "exit" => {
             println!("\nDisconnecting...");
             client.disconnect().await?;
-            println!("Disconnected from server.");
+            println!("Disconnected from device.");
             std::process::exit(0);
         }
         "help" | "?" => {
-            println!("\n=== TELNET Commands ===");
+            println!("\n=== Cisco Telnet Commands ===");
             println!("  quit    - Disconnect and exit");
             println!("  help    - Show this help message");
             println!("  status  - Show connection status");
             println!("  escape  - Return to normal mode");
-            println!("========================\n");
+            println!("================================\n");
             escape_buffer.clear();
         }
         "status" => {
             println!("\n[Connection Status]");
-            println!("  Connected to TELNET server");
+            println!("  Connected to Cisco device");
+            println!("  Logged in: {}", client.is_logged_in());
             println!("  Use 'quit' to disconnect");
             println!("  Use 'escape' to return to normal mode");
-            println!("========================\n");
+            println!("================================\n");
             escape_buffer.clear();
         }
         "escape" => {

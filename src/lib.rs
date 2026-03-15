@@ -28,6 +28,7 @@
 //! }
 //! ```
 
+pub mod cisco_telnet;
 pub mod connection;
 pub mod decoder;
 pub mod encoder;
@@ -39,6 +40,7 @@ pub mod state;
 pub mod types;
 
 pub use connection::TelnetConnection;
+pub use cisco_telnet::CiscoTelnet;
 pub use decoder::TelnetDecoder;
 pub use encoder::TelnetEncoder;
 pub use error::TelnetError;
