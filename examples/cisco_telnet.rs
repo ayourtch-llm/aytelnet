@@ -1,4 +1,4 @@
-//! Cisco Telnet Client Example
+//! CiscoTelnet Interactive CLI Example
 //!
 //! A CLI example for connecting to Cisco devices with automated login.
 //!
@@ -77,12 +77,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // Use select to handle both keyboard input and server events
         tokio::select! {
             // Handle incoming data
-            event = client.receive() => {
+            event = client.receive_line() => {
                 match event {
-                    Ok(TelnetEvent::Data(data)) => {
+                    Ok(line) => {
                         if escape_mode {
                             // Collect data in escape mode
-                            escape_data_buffer.extend_from_slice(&data);
+                            escape_data_buffer.extend_from_slice(line.as_bytes());
                             // Check if we have a complete command
                             if escape_data_buffer.ends_with(b"\n") || escape_data_buffer.ends_with(b"\r") {
                                 if let Ok(text) = String::from_utf8(escape_data_buffer.clone()) {
@@ -93,36 +93,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 escape_buffer.clear();
                             }
                         } else {
-                            // Print received data normally
-                            if let Ok(text) = String::from_utf8(data.clone()) {
-                                print!("{}", text);
-                                io::stdout().flush().unwrap();
-                            }
-                        }
-                    }
-                    Ok(TelnetEvent::Command(cmd)) => {
-                        if !escape_mode {
-                            println!("[Command: {:?}]", cmd);
+                            // Print received line normally
+                            print!("{}", line);
                             io::stdout().flush().unwrap();
                         }
-                    }
-                    Ok(TelnetEvent::OptionNegotiated { option, enabled }) => {
-                        if !escape_mode {
-                            println!("[Option {:02x?}: {}]", option, if enabled { "enabled" } else { "disabled" });
-                            io::stdout().flush().unwrap();
-                        }
-                    }
-                   Ok(TelnetEvent::Closed) => {
-                        if !escape_mode {
-                            println!("\n[Connection closed]");
-                        }
-                        break;
-                    }
-                    Ok(TelnetEvent::Error(e)) => {
-                        if !escape_mode {
-                            println!("\n[Error: {}]", e);
-                        }
-                        break;
                     }
                     Err(e) => {
                         if !escape_mode {
