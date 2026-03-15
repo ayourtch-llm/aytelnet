@@ -149,7 +149,22 @@ impl TelnetConnection {
         let mut buffer = [0u8; 1];
         let bytes_read = stream.read(&mut buffer).await?;
         
-        debug!("Received {} byte(s) from stream: {:?}", bytes_read, buffer);
+        // Create human-readable representation
+        let readable = if buffer[0] >= 32 && buffer[0] <= 126 {
+            // Printable ASCII character
+            format!("'{}' (0x{:02x})", buffer[0] as char, buffer[0])
+        } else if buffer[0] == 10 {
+            "LF (\\n, 0x0a)".to_string()
+        } else if buffer[0] == 13 {
+            "CR (\\r, 0x0d)".to_string()
+        } else if buffer[0] == 0 {
+            "NUL (0x00)".to_string()
+        } else {
+            // Non-printable control character
+            format!("0x{:02x} (control)", buffer[0])
+        };
+        
+        debug!("Received {} byte(s): {} [raw: {:?}]", bytes_read, readable, buffer);
         
         // Check for EOF (server closed connection)
         if bytes_read == 0 {
@@ -172,7 +187,7 @@ impl TelnetConnection {
             Ok(event)
         } else {
             // No complete command yet, return as data
-            debug!("Byte treated as data (not a complete TELNET command): {:?}", buffer[0]);
+            debug!("Byte treated as data (not a complete TELNET command): {} [raw: {:?}]", readable, buffer);
             Ok(TelnetEvent::Data(buffer.to_vec()))
         }
     }

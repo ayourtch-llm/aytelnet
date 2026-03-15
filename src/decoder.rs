@@ -7,6 +7,7 @@
 
 use crate::protocol::*;
 use crate::types::TelnetCommand;
+use tracing::debug;
 
 /// States for the TELNET decoder state machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,92 +65,164 @@ impl TelnetDecoder {
 
     /// Decode a single byte, returning any completed command.
     pub fn decode_byte(&mut self, byte: u8) -> Option<TelnetCommand> {
+        // Create human-readable representation
+        let readable = if byte >= 32 && byte <= 126 {
+            // Printable ASCII character
+            format!("'{}' (0x{:02x})", byte as char, byte)
+        } else if byte == 10 {
+            "LF (\\n, 0x0a)".to_string()
+        } else if byte == 13 {
+            "CR (\\r, 0x0d)".to_string()
+        } else if byte == 0 {
+            "NUL (0x00)".to_string()
+        } else {
+            // Non-printable control character
+            format!("0x{:02x} (control)", byte)
+        };
+        
+        debug!("Decoding byte: {} [state: {:?}]", readable, self.state);
+        
         match self.state {
             DecodeState::Normal => {
                 if byte == IAC {
                     self.state = DecodeState::Iac;
+                    debug!("  -> IAC received, transitioning to Iac state");
                     None
                 } else {
+                    debug!("  -> Data byte: {}", readable);
                     Some(TelnetCommand::Data(byte))
                 }
             }
             
             DecodeState::Iac => {
                 self.state = DecodeState::Normal;
-                match byte {
+                let cmd = match byte {
                     DO => {
+                        debug!("  -> DO command received, waiting for option code");
                         self.state = DecodeState::Do;
                         None
                     }
                     DONT => {
+                        debug!("  -> DONT command received, waiting for option code");
                         self.state = DecodeState::Dont;
                         None
                     }
                     WILL => {
+                        debug!("  -> WILL command received, waiting for option code");
                         self.state = DecodeState::Will;
                         None
                     }
                     WONT => {
+                        debug!("  -> WONT command received, waiting for option code");
                         self.state = DecodeState::Wont;
                         None
                     }
                     SB => {
+                        debug!("  -> SB (subnegotiation) command received, waiting for option code");
                         self.state = DecodeState::Sb;
                         None
                     }
                     SE => {
                         // Unexpected SE, treat as NOP
+                        debug!("  -> SE (unexpected), treating as NOP");
                         Some(TelnetCommand::Nop)
                     }
-                    NOP => Some(TelnetCommand::Nop),
-                    GA => Some(TelnetCommand::GoAhead),
-                    AO => Some(TelnetCommand::AbortOutput),
-                    AYT => Some(TelnetCommand::AreYouThere),
-                    EC => Some(TelnetCommand::EraseCharacter),
-                    EL => Some(TelnetCommand::EraseLine),
-                    IP => Some(TelnetCommand::InterruptProcess),
-                    BRK => Some(TelnetCommand::Break),
-                    DM => Some(TelnetCommand::DataMark),
-                    EOR => Some(TelnetCommand::EndOfRecord),
-                    EOF => Some(TelnetCommand::EndOfFile),
-                    SUSP => Some(TelnetCommand::Suspend),
-                    ABOR => Some(TelnetCommand::Abort),
+                    NOP => {
+                        debug!("  -> NOP command");
+                        Some(TelnetCommand::Nop)
+                    }
+                    GA => {
+                        debug!("  -> GA (Go Ahead) command");
+                        Some(TelnetCommand::GoAhead)
+                    }
+                    AO => {
+                        debug!("  -> AO (Abort Output) command");
+                        Some(TelnetCommand::AbortOutput)
+                    }
+                    AYT => {
+                        debug!("  -> AYT (Are You There) command");
+                        Some(TelnetCommand::AreYouThere)
+                    }
+                    EC => {
+                        debug!("  -> EC (Erase Character) command");
+                        Some(TelnetCommand::EraseCharacter)
+                    }
+                    EL => {
+                        debug!("  -> EL (Erase Line) command");
+                        Some(TelnetCommand::EraseLine)
+                    }
+                    IP => {
+                        debug!("  -> IP (Interrupt Process) command");
+                        Some(TelnetCommand::InterruptProcess)
+                    }
+                    BRK => {
+                        debug!("  -> BRK (Break) command");
+                        Some(TelnetCommand::Break)
+                    }
+                    DM => {
+                        debug!("  -> DM (Data Mark) command");
+                        Some(TelnetCommand::DataMark)
+                    }
+                    EOR => {
+                        debug!("  -> EOR (End of Record) command");
+                        Some(TelnetCommand::EndOfRecord)
+                    }
+                    EOF => {
+                        debug!("  -> EOF (End of File) command");
+                        Some(TelnetCommand::EndOfFile)
+                    }
+                    SUSP => {
+                        debug!("  -> SUSP (Suspend) command");
+                        Some(TelnetCommand::Suspend)
+                    }
+                    ABOR => {
+                        debug!("  -> ABOR (Abort) command");
+                        Some(TelnetCommand::Abort)
+                    }
                     IAC => {
                         // IAC IAC represents a literal IAC byte
+                        debug!("  -> IAC IAC (literal IAC byte)");
                         Some(TelnetCommand::Data(IAC))
                     }
                     _ => {
                         // Unknown command, treat as data
+                        debug!("  -> Unknown command 0x{:02x}, treating as data", byte);
                         Some(TelnetCommand::Data(byte))
                     }
-                }
+                };
+                cmd
             }
             
             DecodeState::Do => {
                 let cmd = TelnetCommand::Do(byte);
+                debug!("  -> DO command completed: option 0x{:02x}", byte);
                 self.state = DecodeState::Normal;
                 Some(cmd)
             }
             
             DecodeState::Dont => {
                 let cmd = TelnetCommand::Dont(byte);
+                debug!("  -> DONT command completed: option 0x{:02x}", byte);
                 self.state = DecodeState::Normal;
                 Some(cmd)
             }
             
             DecodeState::Will => {
                 let cmd = TelnetCommand::Will(byte);
+                debug!("  -> WILL command completed: option 0x{:02x}", byte);
                 self.state = DecodeState::Normal;
                 Some(cmd)
             }
             
             DecodeState::Wont => {
                 let cmd = TelnetCommand::Wont(byte);
+                debug!("  -> WONT command completed: option 0x{:02x}", byte);
                 self.state = DecodeState::Normal;
                 Some(cmd)
             }
             
             DecodeState::Sb => {
+                debug!("  -> SB command completed: option 0x{:02x}, starting data collection", byte);
                 self.state = DecodeState::SbData;
                 self.sb_data.clear();
                 self.sb_data.push(byte);
@@ -159,13 +232,16 @@ impl TelnetDecoder {
             DecodeState::SbData => {
                 if byte == IAC {
                     // Could be start of SE or IAC escape
+                    debug!("  -> SB data: IAC received, waiting for SE or IAC escape");
                     self.state = DecodeState::SbSe;
                     None
                 } else if byte == SE {
                     // Unexpected SE without IAC, treat as data
+                    debug!("  -> SB data: unexpected SE without IAC");
                     self.sb_data.push(byte);
                     None
                 } else {
+                    debug!("  -> SB data byte: {}", readable);
                     self.sb_data.push(byte);
                     None
                 }
@@ -174,6 +250,8 @@ impl TelnetDecoder {
             DecodeState::SbSe => {
                 if byte == SE {
                     // End of subnegotiation
+                    debug!("  -> SB completed: option 0x{:02x}, {} bytes of data", 
+                           self.sb_data[0], self.sb_data.len() - 1);
                     let cmd = TelnetCommand::Subnegotiation {
                         option: self.sb_data[0],
                         data: self.sb_data[1..].to_vec(),
@@ -183,11 +261,13 @@ impl TelnetDecoder {
                     Some(cmd)
                 } else if byte == IAC {
                     // IAC IAC in subnegotiation represents a literal IAC byte
+                    debug!("  -> SB data: IAC IAC (literal IAC byte)");
                     self.sb_data.push(IAC);
                     // Stay in SbSe to wait for SE or another IAC
                     None
                 } else {
                     // Unexpected byte after IAC, treat as data
+                    debug!("  -> SB data: unexpected byte after IAC, treating as data");
                     self.sb_data.push(byte);
                     self.state = DecodeState::SbData;
                     None
