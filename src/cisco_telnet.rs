@@ -34,6 +34,13 @@ use crate::error::{Result, TelnetError};
 use crate::types::TelnetEvent;
 use tracing::{debug, info, warn, error};
 
+/// Check if output contains any of the configured prompt patterns
+fn output_contains_prompt(output: &str) -> bool {
+    // Check for common Cisco prompts
+    let prompts = ["#", "%", ">"];
+    prompts.iter().any(|&p| output.contains(p))
+}
+
 /// CiscoTelnet - A TELNET client for Cisco devices with automated login.
 ///
 /// This struct provides a high-level interface for connecting to Cisco devices
@@ -260,10 +267,43 @@ impl CiscoTelnet {
         // Issue "term len 0" to disable line length wrapping
         debug!("Sending 'term len 0' command to disable line wrapping...");
         self.send(b"term len 0\n").await?;
-        debug!("'term len 0' command sent, waiting for response...");
+        debug!("'term len 0' command sent, consuming response...");
         
-        // Wait for the response (should be quick)
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        // Consume and discard the response from 'term len 0'
+        // We need to wait for the prompt to return
+        let term_len_timeout = std::time::Duration::from_secs(5);
+        let start = std::time::Instant::now();
+        loop {
+            if start.elapsed() > term_len_timeout {
+                warn!("Timeout waiting for 'term len 0' response");
+                break;
+            }
+            
+            match self.telnet.as_mut().ok_or(TelnetError::Disconnected)?.receive().await {
+                Ok(TelnetEvent::Data(data)) => {
+                    // Discard this data - it's the response to 'term len 0'
+                    debug!("Discarding 'term len 0' response: {} bytes", data.len());
+                    // Check if we've seen the prompt (indicates command completed)
+                    if output_contains_prompt(&String::from_utf8_lossy(&data)) {
+                        debug!("'term len 0' response completed, prompt detected");
+                        break;
+                    }
+                }
+                Ok(TelnetEvent::Command(cmd)) => {
+                    debug!("Received TELNET command during 'term len 0' response: {:?}", cmd);
+                }
+                Ok(TelnetEvent::Closed) => {
+                    warn!("Connection closed while waiting for 'term len 0' response");
+                    return Err(TelnetError::Disconnected);
+                }
+                Ok(TelnetEvent::Error(e)) => {
+                    return Err(e);
+                }
+                _ => {}
+            }
+            
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
         
         info!("Connected and authenticated to {}", self.address);
         
