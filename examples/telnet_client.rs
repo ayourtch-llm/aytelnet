@@ -23,7 +23,7 @@ use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
     style::Print,
-    terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{Clear, ClearType},
 };
 use std::env;
 use std::error::Error;
