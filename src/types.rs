@@ -321,3 +321,136 @@ impl ClientState {
         self.get_option(option).is_enabled()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== OptionState Tests ====================
+
+    #[test]
+    fn test_option_state_is_enabled() {
+        // Enabled should return true
+        assert!(OptionState::Enabled.is_enabled());
+
+        // All other states should return false
+        assert!(!OptionState::Closed.is_enabled());
+        assert!(!OptionState::WantsEnable.is_enabled());
+        assert!(!OptionState::WantsDisable.is_enabled());
+        assert!(!OptionState::RemoteWantsEnable.is_enabled());
+        assert!(!OptionState::RemoteWantsDisable.is_enabled());
+    }
+
+    #[test]
+    fn test_option_state_wants_enable() {
+        // WantsEnable should return true
+        assert!(OptionState::WantsEnable.wants_enable());
+
+        // All other states should return false
+        assert!(!OptionState::Closed.wants_enable());
+        assert!(!OptionState::Enabled.wants_enable());
+        assert!(!OptionState::WantsDisable.wants_enable());
+        assert!(!OptionState::RemoteWantsEnable.wants_enable());
+        assert!(!OptionState::RemoteWantsDisable.wants_enable());
+    }
+
+    #[test]
+    fn test_option_state_wants_disable() {
+        // WantsDisable should return true
+        assert!(OptionState::WantsDisable.wants_disable());
+
+        // All other states should return false
+        assert!(!OptionState::Closed.wants_disable());
+        assert!(!OptionState::Enabled.wants_disable());
+        assert!(!OptionState::WantsEnable.wants_disable());
+        assert!(!OptionState::RemoteWantsEnable.wants_disable());
+        assert!(!OptionState::RemoteWantsDisable.wants_disable());
+    }
+
+    // ==================== ClientState Tests ====================
+
+    #[test]
+    fn test_client_state_default() {
+        let state = ClientState::default();
+
+        // Default connection state should be Disconnected
+        assert_eq!(state.connection_state, ConnectionState::Disconnected);
+
+        // Default options map should be empty
+        assert!(state.options.is_empty());
+
+        // Default echo/binary settings should be false
+        assert!(!state.local_echo);
+        assert!(!state.remote_echo);
+        assert!(!state.binary_mode);
+    }
+
+    #[test]
+    fn test_client_state_get_option() {
+        let state = ClientState::default();
+
+        // Getting an undefined option should return Closed
+        assert_eq!(state.get_option(1), OptionState::Closed);
+        assert_eq!(state.get_option(255), OptionState::Closed);
+        assert_eq!(state.get_option(0), OptionState::Closed);
+
+        // After setting an option, get_option should return the set state
+        let mut state = ClientState::default();
+        state.set_option(1, OptionState::Enabled);
+        assert_eq!(state.get_option(1), OptionState::Enabled);
+
+        // Other undefined options should still return Closed
+        assert_eq!(state.get_option(2), OptionState::Closed);
+    }
+
+    #[test]
+    fn test_client_state_set_option() {
+        let mut state = ClientState::default();
+
+        // Initially empty
+        assert!(state.options.is_empty());
+
+        // Set an option and verify it's stored
+        state.set_option(1, OptionState::Enabled);
+        assert_eq!(state.get_option(1), OptionState::Enabled);
+        assert!(state.options.contains_key(&1));
+
+        // Update the same option
+        state.set_option(1, OptionState::Closed);
+        assert_eq!(state.get_option(1), OptionState::Closed);
+
+        // Set multiple options
+        state.set_option(2, OptionState::WantsEnable);
+        state.set_option(3, OptionState::WantsDisable);
+        assert_eq!(state.get_option(2), OptionState::WantsEnable);
+        assert_eq!(state.get_option(3), OptionState::WantsDisable);
+    }
+
+    #[test]
+    fn test_client_state_is_option_enabled() {
+        let mut state = ClientState::default();
+
+        // Undefined option should not be enabled
+        assert!(!state.is_option_enabled(1));
+
+        // Set option to Enabled and verify
+        state.set_option(1, OptionState::Enabled);
+        assert!(state.is_option_enabled(1));
+
+        // Set option to other states and verify it's not enabled
+        state.set_option(1, OptionState::Closed);
+        assert!(!state.is_option_enabled(1));
+
+        state.set_option(1, OptionState::WantsEnable);
+        assert!(!state.is_option_enabled(1));
+
+        state.set_option(1, OptionState::WantsDisable);
+        assert!(!state.is_option_enabled(1));
+
+        state.set_option(1, OptionState::RemoteWantsEnable);
+        assert!(!state.is_option_enabled(1));
+
+        state.set_option(1, OptionState::RemoteWantsDisable);
+        assert!(!state.is_option_enabled(1));
+    }
+}
