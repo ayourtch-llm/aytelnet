@@ -53,19 +53,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("");
     
     // Create CiscoConn with default timeouts
+    // This opens the connection and issues 'term len 0'
     let conn = CiscoConn::new(
         target,
         ConnectionType::CiscoTelnet,
         username,
         password,
-        command,
-    )?;
+    ).await?;
     
     println!("Connecting and executing command...");
     
-    // Execute the command
+    // Execute the command using run_cmd
     // Note: This will attempt to connect to the actual device
-    match conn.execute().await {
+    match conn.run_cmd(command).await {
         Ok(output) => {
             println!("\n=== Command Output ===");
             println!("{}", output);
