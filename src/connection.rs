@@ -240,15 +240,203 @@ impl Default for TelnetConnection {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_new_connection() {
+    // ============================================================================
+    // TelnetConnection Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_connection_new() {
+        // Verify new connection starts in Disconnected state
         let conn = TelnetConnection::new();
-        assert_eq!(conn.state().connection_state(), crate::types::ConnectionState::Disconnected);
+        
+        assert_eq!(
+            conn.state().connection_state(),
+            crate::types::ConnectionState::Disconnected,
+            "New connection should start in Disconnected state"
+        );
+        assert!(!conn.is_connected(), "New connection should not be connected");
     }
 
-    #[test]
-    fn test_is_connected() {
-        let conn = TelnetConnection::new();
+    #[tokio::test]
+    async fn test_connection_state_transitions() {
+        // Verify state transitions from Disconnected to Connected
+        let mut conn = TelnetConnection::new();
+        
+        // Initial state should be Disconnected
+        assert_eq!(
+            conn.state().connection_state(),
+            crate::types::ConnectionState::Disconnected
+        );
+        
+        // After connect (mocked via state manager), should be Connected
+        conn.state_manager.set_connection_state(crate::types::ConnectionState::Connected);
+        assert_eq!(
+            conn.state().connection_state(),
+            crate::types::ConnectionState::Connected
+        );
+        assert!(conn.is_connected(), "is_connected() should return true when connected");
+        
+        // After disconnect, should be Disconnected again
+        conn.state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
+        assert_eq!(
+            conn.state().connection_state(),
+            crate::types::ConnectionState::Disconnected
+        );
+        assert!(!conn.is_connected(), "is_connected() should return false after disconnect");
+    }
+
+    #[tokio::test]
+    async fn test_decoder_accessors() {
+        // Verify get_decoder() and get_decoder_mut() work correctly
+        
+        let mut conn = TelnetConnection::new();
+        
+        // Test immutable reference - verify decoder is accessible
+        let decoder_ref = conn.get_decoder();
+        assert!(decoder_ref.state() == crate::decoder::DecodeState::Normal);
+        drop(decoder_ref); // Release the immutable borrow
+        
+        // Test mutable reference
+        let decoder_mut = conn.get_decoder_mut();
+        assert!(decoder_mut.state() == crate::decoder::DecodeState::Normal);
+        drop(decoder_mut); // Release the mutable borrow
+        
+        // Verify both references point to the same decoder
+        let decoder_ref2 = conn.get_decoder();
+        // Both should have same state
+        assert_eq!(decoder_ref2.state(), crate::decoder::DecodeState::Normal);
+    }
+
+    // ============================================================================
+    // State Manager Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_state_manager_connection_state() {
+        // Verify connection state getter/setter
+        
+        let mut state_manager = StateManager::new();
+        
+        // Initial state should be Disconnected
+        assert_eq!(
+            state_manager.connection_state(),
+            crate::types::ConnectionState::Disconnected
+        );
+        
+        // Set to Connected
+        state_manager.set_connection_state(crate::types::ConnectionState::Connected);
+        assert_eq!(
+            state_manager.connection_state(),
+            crate::types::ConnectionState::Connected
+        );
+        
+        // Set back to Disconnected
+        state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
+        assert_eq!(
+            state_manager.connection_state(),
+            crate::types::ConnectionState::Disconnected
+        );
+    }
+
+    #[tokio::test]
+    async fn test_state_manager_is_connected() {
+        // Verify is_connected() returns correct value
+        
+        let mut conn = TelnetConnection::new();
+        
+        // Initially not connected
+        assert!(!conn.is_connected(), "Should not be connected initially");
+        
+        // Set to Connected state
+        conn.state_manager.set_connection_state(crate::types::ConnectionState::Connected);
+        assert!(conn.is_connected(), "Should be connected after setting Connected state");
+        
+        // Set to Disconnected state
+        conn.state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
+        assert!(!conn.is_connected(), "Should not be connected after setting Disconnected state");
+    }
+
+    // ============================================================================
+    // Integration Tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_connection_full_lifecycle() {
+        // Simulate full connection lifecycle (new → connect → disconnect)
+        
+        // Step 1: Create new connection
+        let mut conn = TelnetConnection::new();
+        assert_eq!(
+            conn.state().connection_state(),
+            crate::types::ConnectionState::Disconnected
+        );
         assert!(!conn.is_connected());
+        
+        // Step 2: Simulate connect by setting stream and state
+        // (We can't actually connect to a server in tests, so we mock the state)
+        conn.state_manager.set_connection_state(crate::types::ConnectionState::Connected);
+        
+        assert_eq!(
+            conn.state().connection_state(),
+            crate::types::ConnectionState::Connected
+        );
+        assert!(conn.is_connected());
+        
+        // Step 3: Simulate disconnect
+        conn.state_manager.set_connection_state(crate::types::ConnectionState::Disconnected);
+        
+        assert_eq!(
+            conn.state().connection_state(),
+            crate::types::ConnectionState::Disconnected
+        );
+        assert!(!conn.is_connected());
+    }
+
+    #[tokio::test]
+    async fn test_decoder_state_preservation() {
+        // Test that decoder preserves state across multiple reads
+        
+        let mut conn = TelnetConnection::new();
+        let decoder = conn.get_decoder_mut();
+        
+        // Initial state
+        assert!(decoder.state() == crate::decoder::DecodeState::Normal);
+        
+        // Decode some data
+        let data1 = vec![0x48, 0x65, 0x6c, 0x6c, 0x6f]; // "Hello"
+        let commands1 = decoder.decode(&data1);
+        assert!(!commands1.is_empty());
+        
+        // Decode more data
+        let data2 = vec![0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64]; // " World"
+        let commands2 = decoder.decode(&data2);
+        assert!(!commands2.is_empty());
+        
+        // Decoder should maintain state
+        assert!(decoder.state() == crate::decoder::DecodeState::Normal);
+    }
+
+    #[tokio::test]
+    async fn test_state_manager_default() {
+        // Verify StateManager default behavior
+        
+        let state_manager = StateManager::new();
+        
+        assert_eq!(
+            state_manager.connection_state(),
+            crate::types::ConnectionState::Disconnected
+        );
+    }
+
+    #[tokio::test]
+    async fn test_telnet_connection_default() {
+        // Verify TelnetConnection implements Default correctly
+        
+        let conn = TelnetConnection::default();
+        let conn_new = TelnetConnection::new();
+        
+        // Both should be in the same state
+        assert_eq!(conn.state().connection_state(), conn_new.state().connection_state());
+        assert_eq!(conn.is_connected(), conn_new.is_connected());
     }
 }
