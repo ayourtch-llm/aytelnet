@@ -28,31 +28,32 @@ This document maps TELNET RFC requirements to current implementation status.
 | NVT Character Set | Partial | [ ] | NEEDS IMPLEMENTATION |
 | IAC byte (255/0xFF) | Full | [x] | `src/protocol.rs:IAC` |
 | Data byte escaping (IAC IAC) | Full | [x] | `src/decoder.rs:DecodeState::Iac` |
-| EOR (End of Record) | Removed | [x] | `src/decoder.rs:EOR` (unreachable) |
+| EOR (End of Record) | Full | [x] | `src/protocol.rs:EOR` |
 
 ### Section 4: Command Structure
 
 | Command | Code | Implementation | Status | File Location |
 |---------|------|----------------|--------|---------------|
 | IAC (Interpret As Command) | 255 | Full | [x] | `src/protocol.rs:IAC` |
-| DO | 253 | Full | [x] | `src/decoder.rs:DO` |
-| DONT | 254 | Full | [x] | `src/decoder.rs:DONT` |
-| WILL | 251 | Full | [x] | `src/decoder.rs:WILL` |
-| WONT | 252 | Full | [x] | `src/decoder.rs:WONT` |
-| SB (Subnegotiation) | 250 | Full | [x] | `src/decoder.rs:SB` |
-| SE (Subnegotiation End) | 240 | Full | [x] | `src/decoder.rs:SE` |
-| NOP (No Operation) | 242 | Full | [x] | `src/decoder.rs:NOP` |
-| GA (Go Ahead) | 249 | Full | [x] | `src/decoder.rs:GA` |
-| AO (Abort Output) | 247 | Full | [x] | `src/decoder.rs:AO` |
-| AYT (Are You There) | 246 | Full | [x] | `src/decoder.rs:AYT` |
-| EC (Erase Character) | 245 | Full | [x] | `src/decoder.rs:EC` |
-| EL (Erase Line) | 244 | Full | [x] | `src/decoder.rs:EL` |
-| IP (Interrupt Process) | 243 | Full | [x] | `src/decoder.rs:IP` |
-| BRK (Break) | 241 | Full | [x] | `src/decoder.rs:BRK` |
-| DM (Data Mark) | 238 | Full | [x] | `src/decoder.rs:DM` |
-| EOF (End of File) | 236 | Full | [x] | `src/decoder.rs:EOF` |
-| SUSP (Suspend) | 235 | Full | [x] | `src/decoder.rs:SUSP` |
-| ABOR (Abort) | 248 | Full | [x] | `src/decoder.rs:ABOR` |
+| DO | 253 | Full | [x] | `src/protocol.rs:DO` |
+| DONT | 254 | Full | [x] | `src/protocol.rs:DONT` |
+| WILL | 251 | Full | [x] | `src/protocol.rs:WILL` |
+| WONT | 252 | Full | [x] | `src/protocol.rs:WONT` |
+| SB (Subnegotiation) | 250 | Full | [x] | `src/protocol.rs:SB` |
+| SE (Subnegotiation End) | 240 | Full | [x] | `src/protocol.rs:SE` |
+| NOP (No Operation) | 241 | Full | [x] | `src/protocol.rs:NOP` |
+| DM (Data Mark) | 242 | Full | [x] | `src/protocol.rs:DM` |
+| BRK (Break) | 243 | Full | [x] | `src/protocol.rs:BRK` |
+| IP (Interrupt Process) | 244 | Full | [x] | `src/protocol.rs:IP` |
+| AO (Abort Output) | 245 | Full | [x] | `src/protocol.rs:AO` |
+| AYT (Are You There) | 246 | Full | [x] | `src/protocol.rs:AYT` |
+| EC (Erase Character) | 247 | Full | [x] | `src/protocol.rs:EC` |
+| EL (Erase Line) | 248 | Full | [x] | `src/protocol.rs:EL` |
+| GA (Go Ahead) | 249 | Full | [x] | `src/protocol.rs:GA` |
+| EOR (End of Record) | 239 | Full | [x] | `src/protocol.rs:EOR` |
+| EOF (End of File) | 236 | Full | [x] | `src/protocol.rs:EOF` |
+| SUSP (Suspend) | 237 | Full | [x] | `src/protocol.rs:SUSP` |
+| ABOR (Abort) | 238 | Full | [x] | `src/protocol.rs:ABOR` |
 
 ### Section 5: Data Transmission
 
@@ -84,7 +85,7 @@ This document maps TELNET RFC requirements to current implementation status.
 
 | Requirement | Implementation | Status | File Location |
 |-------------|----------------|--------|---------------|
-| Option code: 8 | Full | [x] | `src/protocol.rs:OPT_BINARY` |
+| Option code: 0 | Full | [x] | `src/protocol.rs:OPT_BINARY` |
 | Per-direction negotiation | Full | [x] | `src/options.rs:OptionState` |
 | 8-bit data transmission | Full | [x] | `src/encoder.rs`, `src/decoder.rs` |
 
@@ -204,15 +205,18 @@ This document maps TELNET RFC requirements to current implementation status.
 
 ### Test Coverage
 
-- **Unit Tests:** 96 tests total
+- **Unit Tests:** 201 tests total
   - `types.rs`: 7 tests ✅
   - `connection.rs`: 9 tests ✅
   - `cisco_telnet.rs`: 12 tests ✅
   - `decoder.rs`: 17 tests ✅
+  - `decoder_persistence_tests.rs`: 6 tests ✅
   - `encoder.rs`: 11 tests ✅
   - `options.rs`: 20 tests ✅
   - `state.rs`: 10 tests ✅
   - `cisco_conn.rs`: 10 tests ✅
+  - `error.rs`: 2 tests ✅
+  - `rfc_compliance_tests.rs`: 105 tests ✅ (RFC 854-860 compliance)
 
 - **Integration Tests:** 1 example (`cisco_conn`)
   - Manual verification required

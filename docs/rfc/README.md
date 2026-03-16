@@ -25,7 +25,7 @@ This document summarizes the downloaded RFCs for TELNET protocol implementation.
 - **Status**: Internet Standard
 - **Key Concepts**:
   - 8-bit binary data transmission
-  - Option code: 8
+  - Option code: 0 (TRANSMIT-BINARY)
   - IAC doubling for literal data bytes
   - Per-direction negotiation
 
@@ -112,11 +112,11 @@ This document summarizes the downloaded RFCs for TELNET protocol implementation.
 ### Common Option Codes
 | Code | Option Name          | Description                    |
 |------|---------------------|--------------------------------|
+| 0    | BINARY              | 8-bit binary transmission      |
 | 1    | ECHO                | Echo characters locally        |
 | 3    | SUPPRESS-GO-AHEAD   | Suppress GA character          |
 | 5    | STATUS              | Query option status            |
 | 6    | TIMING-MARK         | Synchronization                |
-| 8    | BINARY              | 8-bit binary transmission      |
 | 24   | TERMINAL-TYPE       | Terminal type identification   |
 | 31   | NAWS                | Negotiate window size          |
 | 34   | LINEMODE            | Local line editing             |
