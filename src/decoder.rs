@@ -175,6 +175,10 @@ impl TelnetDecoder {
                         debug!("  -> ABOR (Abort) command");
                         Some(TelnetCommand::Abort)
                     }
+                    EOR => {
+                        debug!("  -> EOR (End of Record) command");
+                        Some(TelnetCommand::EndOfRecord)
+                    }
                     IAC => {
                         // IAC IAC represents a literal IAC byte
                         debug!("  -> IAC IAC (literal IAC byte)");
@@ -259,7 +263,8 @@ impl TelnetDecoder {
                     // IAC IAC in subnegotiation represents a literal IAC byte
                     debug!("  -> SB data: IAC IAC (literal IAC byte)");
                     self.sb_data.push(IAC);
-                    // Stay in SbSe to wait for SE or another IAC
+                    // Return to SbData since the IAC escape is complete
+                    self.state = DecodeState::SbData;
                     None
                 } else {
                     // Unexpected byte after IAC, treat as data

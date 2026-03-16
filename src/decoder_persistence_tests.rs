@@ -69,9 +69,9 @@ mod tests {
         let commands = decoder.decode(&[4, IAC]);
         assert_eq!(commands.len(), 0); // Still waiting for SE or IAC
         
-        // Fourth chunk: IAC (literal escape) + SE (end marker)
-        // IAC IAC = literal IAC byte, then SE ends the subnegotiation
-        let commands = decoder.decode(&[IAC, SE]);
+        // Fourth chunk: IAC (literal escape) + IAC SE (end marker)
+        // IAC IAC = literal IAC byte, then IAC SE ends the subnegotiation
+        let commands = decoder.decode(&[IAC, IAC, SE]);
         assert_eq!(commands.len(), 1);
         // sb_data contains: [TERMINAL-TYPE, 1, 2, 3, 4, IAC]
         // After extracting option (first byte), data is [1, 2, 3, 4, IAC]

@@ -50,11 +50,17 @@ impl TelnetEncoder {
             TelnetCommand::Will(opt) => vec![IAC, WILL, *opt],
             TelnetCommand::Wont(opt) => vec![IAC, WONT, *opt],
             TelnetCommand::Subnegotiation { option, data } => {
-                let mut result = Vec::with_capacity(3 + data.len() + 2);
+                let mut result = Vec::with_capacity(3 + data.len() * 2 + 2);
                 result.push(IAC);
                 result.push(SB);
                 result.push(*option);
-                result.extend_from_slice(data);
+                // IAC bytes within subnegotiation data must be doubled per RFC 855
+                for &byte in data {
+                    result.push(byte);
+                    if byte == IAC {
+                        result.push(IAC);
+                    }
+                }
                 result.push(IAC);
                 result.push(SE);
                 result

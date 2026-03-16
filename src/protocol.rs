@@ -11,25 +11,25 @@
 /// TELNET command or option code, not as data.
 pub const IAC: u8 = 255;
 
-/// DO command - 254 (0xFE)
+/// DO command - 253 (0xFD)
 ///
 /// The sender of this command REQUESTS that the receiver enable an option.
-pub const DO: u8 = 254;
+pub const DO: u8 = 253;
 
-/// DON'T command - 253 (0xFD)
+/// DON'T command - 254 (0xFE)
 ///
 /// The sender of this command DEMANDS that the receiver disable an option.
-pub const DONT: u8 = 253;
+pub const DONT: u8 = 254;
 
-/// WILL command - 252 (0xFC)
+/// WILL command - 251 (0xFB)
 ///
 /// The sender of this command DECLARES that it will enable an option.
-pub const WILL: u8 = 252;
+pub const WILL: u8 = 251;
 
-/// WON'T command - 251 (0xFB)
+/// WON'T command - 252 (0xFC)
 ///
 /// The sender of this command DECLARES that it will not enable an option.
-pub const WONT: u8 = 251;
+pub const WONT: u8 = 252;
 
 /// SB (Subnegotiation Begin) command - 250 (0xFA)
 ///
@@ -46,50 +46,50 @@ pub const SE: u8 = 240;
 /// No operation. Used to maintain synchronization.
 pub const NOP: u8 = 241;
 
-/// GA (Go Ahead) command - 242 (0xF2)
+/// GA (Go Ahead) command - 249 (0xF9)
 ///
 /// Indicates that the receiver may transmit.
-pub const GA: u8 = 242;
+pub const GA: u8 = 249;
 
-/// AO (Abort Output) command - 243 (0xF3)
+/// AO (Abort Output) command - 245 (0xF5)
 ///
 /// Indicates that the previous output should be discarded.
-pub const AO: u8 = 243;
+pub const AO: u8 = 245;
 
-/// AYT (Are You There) command - 244 (0xF4)
+/// AYT (Are You There) command - 246 (0xF6)
 ///
 /// Asks if the receiver is still present.
-pub const AYT: u8 = 244;
+pub const AYT: u8 = 246;
 
-/// EC (Erase Character) command - 245 (0xF5)
+/// EC (Erase Character) command - 247 (0xF7)
 ///
 /// Request to erase the last character.
-pub const EC: u8 = 245;
+pub const EC: u8 = 247;
 
-/// EL (Erase Line) command - 246 (0xF6)
+/// EL (Erase Line) command - 248 (0xF8)
 ///
 /// Request to erase the current line.
-pub const EL: u8 = 246;
+pub const EL: u8 = 248;
 
-/// IP (Interrupt Process) command - 247 (0xF7)
+/// IP (Interrupt Process) command - 244 (0xF4)
 ///
 /// Request to interrupt the current process.
-pub const IP: u8 = 247;
+pub const IP: u8 = 244;
 
-/// BRK (Break) command - 248 (0xF8)
+/// BRK (Break) command - 243 (0xF3)
 ///
 /// Indicates a break condition.
-pub const BRK: u8 = 248;
+pub const BRK: u8 = 243;
 
-/// DM (Data Mark) command - 249 (0xF9)
+/// DM (Data Mark) command - 242 (0xF2)
 ///
 /// Marks significant data.
-pub const DM: u8 = 249;
+pub const DM: u8 = 242;
 
-/// EOR (End of Record) command - 240 (0xF0)
+/// EOR (End of Record) command - 239 (0xEF)
 ///
 /// Marks end of record.
-pub const EOR: u8 = 240;
+pub const EOR: u8 = 239;
 
 /// EOF (End of File) command - 236 (0xEC)
 ///
@@ -128,10 +128,10 @@ pub const OPT_STATUS: u8 = 5;
 /// Synchronization mechanism.
 pub const OPT_TIMING_MARK: u8 = 6;
 
-/// BINARY option - 8
+/// BINARY option - 0
 ///
-/// Enable 8-bit binary data transmission.
-pub const OPT_BINARY: u8 = 8;
+/// Enable 8-bit binary data transmission (RFC 856: TRANSMIT-BINARY code 0).
+pub const OPT_BINARY: u8 = 0;
 
 /// TERMINAL-TYPE option - 24
 ///
