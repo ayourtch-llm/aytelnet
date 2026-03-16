@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Create CiscoConn with default timeouts
     // This opens the connection and issues 'term len 0'
-    let conn = CiscoConn::new(
+    let mut conn = CiscoConn::new(
         target,
         ConnectionType::CiscoTelnet,
         username,

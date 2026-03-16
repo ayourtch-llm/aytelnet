@@ -79,6 +79,7 @@ impl Default for CiscoConnConfig {
 /// ```
 pub struct CiscoConn {
     config: CiscoConnConfig,
+    client: CiscoTelnet,
 }
 
 impl CiscoConn {
@@ -104,37 +105,14 @@ impl CiscoConn {
         username: &str,
         password: &str,
     ) -> Result<Self, TelnetError> {
-        // Create the client with default timeouts
-        let mut client = match conntype {
-            ConnectionType::CiscoTelnet => {
-                let client = CiscoTelnet::new(target, username, password);
-                client.with_timeout(Duration::from_secs(30))
-                    .with_read_timeout(Duration::from_secs(30))
-            }
-        };
-
-        // Add default prompts
-        for prompt in &["Router#", "Switch#", "config#", "cli#"] {
-            client = client.with_prompt(prompt);
-        }
-
-        // Connect and authenticate
-        client.connect().await?;
-
-        // Issue term len 0 to disable pagination
-        client.send(b"term len 0\n").await?;
-        // Wait for response
-        let _ = client.receive_until(b"#", Duration::from_secs(5)).await;
-
-        Ok(Self {
-            config: CiscoConnConfig {
-                target: target.to_string(),
-                conntype,
-                username: username.to_string(),
-                password: password.to_string(),
-                ..Default::default()
-            },
-        })
+        Self::with_timeouts(
+            target,
+            conntype,
+            username,
+            password,
+            Duration::from_secs(30),
+            Duration::from_secs(30),
+        ).await
     }
 
     /// Create a new CiscoConn with custom timeouts
@@ -163,6 +141,13 @@ impl CiscoConn {
         timeout: Duration,
         read_timeout: Duration,
     ) -> Result<Self, TelnetError> {
+        let prompts: Vec<String> = vec![
+            "Router#".to_string(),
+            "Switch#".to_string(),
+            "config#".to_string(),
+            "cli#".to_string(),
+        ];
+
         // Create the client with custom timeouts
         let mut client = match conntype {
             ConnectionType::CiscoTelnet => {
@@ -172,7 +157,7 @@ impl CiscoConn {
         };
 
         // Add default prompts
-        for prompt in &["Router#", "Switch#", "config#", "cli#"] {
+        for prompt in &prompts {
             client = client.with_prompt(prompt);
         }
 
@@ -192,8 +177,9 @@ impl CiscoConn {
                 password: password.to_string(),
                 timeout,
                 read_timeout,
-                ..Default::default()
+                prompts,
             },
+            client,
         })
     }
 
@@ -210,49 +196,31 @@ impl CiscoConn {
     ///
     /// * `Ok(String)` - Command output
     /// * `Err(TelnetError)` - Connection or execution error
-    pub async fn run_cmd(&self, cmd: &str) -> Result<String, TelnetError> {
+    pub async fn run_cmd(&mut self, cmd: &str) -> Result<String, TelnetError> {
         debug!("Starting CiscoConn::run_cmd for target: {}", self.config.target);
         debug!("Command: {}", cmd);
-
-        // Determine connection type and create appropriate client
-        let mut client = match self.config.conntype {
-            ConnectionType::CiscoTelnet => {
-                debug!("Creating CiscoTelnet client with timeout: {:?}, read_timeout: {:?}", self.config.timeout, self.config.read_timeout);
-                let client = CiscoTelnet::new(&self.config.target, &self.config.username, &self.config.password);
-                client.with_timeout(self.config.timeout).with_read_timeout(self.config.read_timeout)
-            }
-        };
-
-        // Add custom prompts if provided
-        for prompt in &self.config.prompts {
-            debug!("Adding prompt: {}", prompt);
-            client = client.with_prompt(prompt);
-        }
-
-        info!("Connecting to device...");
-        // Connect and authenticate
-        client.connect().await?;
-        info!("Connected successfully");
 
         // Send the command with newline
         let command_with_newline = format!("{}\n", cmd);
         debug!("Sending command: {}", command_with_newline);
-        client.send(command_with_newline.as_bytes()).await?;
+        self.client.send(command_with_newline.as_bytes()).await?;
         debug!("Command sent successfully");
 
         // Wait for command output until prompt is detected
-        // Instead of waiting for newline, wait for privilege prompt (#)
         info!("Waiting for command output until prompt detected (timeout: {:?})", self.config.read_timeout);
-        let output = client.receive_until(b"#", self.config.read_timeout).await?;
+        let output = self.client.receive_until(b"#", self.config.read_timeout).await?;
         debug!("Received output ({} bytes)", output.len());
-
-        // Disconnect
-        info!("Disconnecting from device...");
-        client.disconnect().await?;
-        info!("Disconnected successfully");
 
         debug!("Command execution completed successfully");
         Ok(output)
+    }
+
+    /// Disconnect from the device
+    pub async fn disconnect(&mut self) -> Result<(), TelnetError> {
+        info!("Disconnecting from device...");
+        self.client.disconnect().await?;
+        info!("Disconnected successfully");
+        Ok(())
     }
 
     /// Get the configured target address
