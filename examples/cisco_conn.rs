@@ -65,16 +65,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Execute the command using run_cmd
     // Note: This will attempt to connect to the actual device
-    match conn.run_cmd(command).await {
-        Ok(output) => {
-            println!("\n=== Command Output ===");
-            println!("{}", output);
-        }
-        Err(e) => {
-            error!("Error executing command: {}", e);
-            eprintln!("\nError executing command: {}", e);
-            std::process::exit(1);
-        }
+    let cmds = command.split(";");
+    for ref command in cmds {
+	match conn.run_cmd(command).await {
+	    Ok(output) => {
+		println!("\n=== Command Output ===");
+		println!("{}", output);
+	    }
+	    Err(e) => {
+		error!("Error executing command: {}", e);
+		eprintln!("\nError executing command: {}", e);
+		std::process::exit(1);
+	    }
+	}
     }
     
     info!("=== Execution Complete ===");
