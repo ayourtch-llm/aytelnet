@@ -884,6 +884,33 @@ impl CiscoTelnet {
         Ok(output)
     }
 
+    /// Receive raw data bytes from the connection, stripping TELNET protocol (IAC sequences).
+    ///
+    /// Semantics:
+    /// - If data is already buffered or immediately available, return it RIGHT AWAY
+    ///   (do NOT wait for more data or for the timeout to expire)
+    /// - Only block up to `timeout` if there is NO data available yet
+    /// - Returns an empty Vec if the timeout expires with no data
+    /// - This means: first chunk arrives fast, caller can call again for more
+    ///
+    /// This enables the caller to do fast-paced incremental pattern matching
+    /// without being blocked waiting for a full buffer or timeout.
+    ///
+    /// This is a low-level method — no prompt detection or delimiter matching.
+    pub async fn receive(&mut self, timeout: Duration) -> Result<Vec<u8>> {
+        let conn = self.telnet.as_mut().ok_or(TelnetError::Disconnected)?;
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            match tokio::time::timeout_at(deadline, conn.receive()).await {
+                Ok(Ok(TelnetEvent::Data(bytes))) => return Ok(bytes.to_vec()),
+                Ok(Ok(TelnetEvent::Closed)) => return Err(TelnetError::Disconnected),
+                Ok(Ok(_)) => continue, // protocol event, try again within same deadline
+                Ok(Err(e)) => return Err(e),
+                Err(_) => return Ok(vec![]), // timeout, no data
+            }
+        }
+    }
+
     /// Receive a single line of output.
     ///
     /// # Returns
@@ -1056,5 +1083,23 @@ mod tests {
         let buffer = vec![1, 2, 3, 4, 5];
         assert!(CiscoTelnet::buffer_ends_with(&buffer, &[4, 5]));
         assert!(!CiscoTelnet::buffer_ends_with(&buffer, &[1, 2]));
+    }
+
+    #[tokio::test]
+    async fn test_receive_on_disconnected_client() {
+        let mut client = CiscoTelnet::new("192.168.1.1", "admin", "secret");
+        let result = client.receive(Duration::from_millis(100)).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), TelnetError::Disconnected));
+    }
+
+    #[tokio::test]
+    async fn test_receive_signature_compiles() {
+        // Verify that receive() accepts Duration and returns Result<Vec<u8>>
+        let mut client = CiscoTelnet::new("192.168.1.1", "admin", "secret");
+        let result: std::result::Result<Vec<u8>, TelnetError> =
+            client.receive(Duration::from_millis(1)).await;
+        // Should fail because not connected, but the types must match
+        assert!(result.is_err());
     }
 }
