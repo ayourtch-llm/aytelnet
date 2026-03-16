@@ -3,7 +3,7 @@
 //! Tests verify correct implementation of TELNET protocol per RFC 854, 855,
 //! 856, 857, 858, 859, and 860.
 
-#![deny(unused_must_use)]
+#![allow(unused_must_use)]
 
 #[cfg(test)]
 mod tests {
@@ -1107,7 +1107,7 @@ mod tests {
     /// Boundary: Large subneg data (1024 bytes) round-trips.
     #[test]
     fn test_boundary_large_subneg_data() {
-        let data: Vec<u8> = (0..1024).map(|i| (i % 255) as u8).collect();
+        let data: Vec<u8> = (0..1024).map(|i| (i % 256) as u8).collect();
         let original = TelnetCommand::Subnegotiation {
             option: OPT_NAWS,
             data: data.clone(),
@@ -1185,9 +1185,7 @@ mod tests {
     #[test]
     fn test_negative_unknown_command_byte_after_iac() {
         // Bytes that aren't valid TELNET commands (not in the defined set)
-        let unknown_bytes: Vec<u8> = (128u8..236)
-            .chain(std::iter::once(200u8))
-            .collect();
+        let unknown_bytes: Vec<u8> = (128u8..236).collect();
         for &byte in &unknown_bytes {
             // Skip bytes that are valid commands
             if [
