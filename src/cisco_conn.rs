@@ -183,13 +183,8 @@ impl CiscoConn {
             client = client.with_prompt(prompt);
         }
 
-        // Connect and authenticate
+        // Connect and authenticate (connect() already sends "term len 0")
         client.connect().await?;
-
-        // Issue term len 0 to disable pagination
-        client.send(b"term len 0\n").await?;
-        // Wait for response
-        let _ = client.receive_until(b"#", read_timeout).await;
 
         Ok(Self {
             config: CiscoConnConfig {
