@@ -41,6 +41,17 @@ pub struct TelnetConnection {
     decoder: TelnetDecoder,
 }
 
+impl std::fmt::Debug for TelnetConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TelnetConnection")
+            .field("connected", &self.stream.is_some())
+            .field("state_manager", &self.state_manager)
+            .field("option_negotiator", &self.option_negotiator)
+            .field("decoder", &self.decoder)
+            .finish()
+    }
+}
+
 impl TelnetConnection {
     /// Create a new connection.
     pub fn new() -> Self {

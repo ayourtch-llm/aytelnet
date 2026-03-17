@@ -40,6 +40,7 @@ mod rfc_compliance_tests;
 pub mod error;
 pub mod options;
 pub mod protocol;
+pub mod raw_session;
 pub mod state;
 pub mod types;
 
@@ -51,5 +52,6 @@ pub use encoder::TelnetEncoder;
 pub use error::TelnetError;
 pub use options::OptionNegotiator;
 pub use protocol::*;
+pub use raw_session::RawTelnetSession;
 pub use state::StateManager;
 pub use types::*;
