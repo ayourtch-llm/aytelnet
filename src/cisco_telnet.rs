@@ -789,33 +789,6 @@ impl CiscoTelnet {
         trimmed[start..].to_vec()
     }
 
-    /// Helper function to check if buffer contains bytes.
-    fn buffer_contains(buffer: &[u8], bytes: &[u8]) -> bool {
-        if bytes.is_empty() {
-            return true;
-        }
-        if bytes.len() > buffer.len() {
-            return false;
-        }
-        
-        for i in 0..=(buffer.len() - bytes.len()) {
-            if &buffer[i..i + bytes.len()] == bytes {
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Helper function to check if buffer ends with bytes.
-    fn buffer_ends_with(buffer: &[u8], suffix: &[u8]) -> bool {
-        if suffix.is_empty() {
-            return true;
-        }
-        if suffix.len() > buffer.len() {
-            return false;
-        }
-        &buffer[buffer.len() - suffix.len()..] == suffix
-    }
 
     /// Send data to the device.
     ///
